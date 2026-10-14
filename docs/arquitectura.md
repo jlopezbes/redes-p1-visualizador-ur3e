@@ -81,6 +81,7 @@ Una clase de excepción por capa (D10): `ErrorRed` sale de `red.py` y se queda e
 | Dónde | Constante | Valor | Unidad | Para qué |
 |---|---|---|---|---|
 | `ur.py` | `VELOCIDAD_MAX` / `ACELERACION_MAX` | 0,3 / 0,5 | rad/s / rad/s² | Límite de `movej`: se niega a enviar más (robot real). |
+| `ur.py` | `MINIMO` | 0,001 | rad/s y rad/s² | Velocidad y aceleración mínimas de `movej`: por debajo, Python escribiría `1e-05` y no se sabe si URScript lo admite. |
 | `ur.py` | `REINTENTO` | 2,0 | s | Espera entre reconexiones. |
 | `ur.py` | `PLAZO_ESTADO` | 2,0 | s | Un `q` más viejo no es actual: `ultimo_q()` da `None`, `movej` se niega y el cliente lanza `ErrorUR`. |
 | `ur.py` | `TAM_SUB_JOINTS`, `OFFSET_Q_ACTUAL` | 251, 252 | bytes | Formato esperado; con otro tamaño de subpaquete de articulaciones, `ErrorUR` (no hay movimiento). No verificado con un robot real. |

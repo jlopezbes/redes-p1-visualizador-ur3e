@@ -47,6 +47,7 @@ OFFSET_Q_ACTUAL = 252   # 4 + 8 + 5 bloques de 6 doubles (q_target, qd_target, q
 # ---- Limites obligatorios en robot real ----
 VELOCIDAD_MAX = 0.3     # rad/s
 ACELERACION_MAX = 0.5   # rad/s2
+MINIMO = 0.001          # rad/s y rad/s2: por debajo Python escribiria 1e-05 y no se sabe si URScript lo admite
 LIMITE_Q_ENVIO = 2 * math.pi            # rad: es_punto_valido() no deja ENVIAR angulos fuera de +-2*pi
 LIMITE_Q_LECTURA = 2 * math.pi + 0.2    # rad: al LEER se admite un margen, por si el robot esta en el tope de una articulacion
 
@@ -281,10 +282,10 @@ class UrPrimaria(ClienteUR):
         Los argumentos son solo por nombre para no mezclar velocidad y aceleracion (URScript: a=, v=)."""
         if not es_punto_valido(q):
             raise ValueError("angulos fuera de [-2pi, 2pi] (rad), o no son 6: {}".format(q))
-        if not (isinstance(velocidad, (int, float)) and 0 < velocidad <= VELOCIDAD_MAX):
-            raise ValueError("velocidad {} rad/s fuera de (0, {}]".format(velocidad, VELOCIDAD_MAX))
-        if not (isinstance(aceleracion, (int, float)) and 0 < aceleracion <= ACELERACION_MAX):
-            raise ValueError("aceleracion {} rad/s2 fuera de (0, {}]".format(aceleracion, ACELERACION_MAX))
+        if not (isinstance(velocidad, (int, float)) and MINIMO <= velocidad <= VELOCIDAD_MAX):
+            raise ValueError("velocidad {} rad/s fuera de [{}, {}]".format(velocidad, MINIMO, VELOCIDAD_MAX))
+        if not (isinstance(aceleracion, (int, float)) and MINIMO <= aceleracion <= ACELERACION_MAX):
+            raise ValueError("aceleracion {} rad/s2 fuera de [{}, {}]".format(aceleracion, MINIMO, ACELERACION_MAX))
         if not self.estado_fresco():
             raise ErrorUR("{}: no se envia el movej porque no hay un estado del robot de hace menos de {} s".format(
                 self.red.destino, PLAZO_ESTADO))

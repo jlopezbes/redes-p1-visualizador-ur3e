@@ -358,7 +358,8 @@ class PruebasOrdenesSeguras(unittest.TestCase):
 
     def test_movej_con_tipos_raros_es_valueerror(self):
         self.robot.marcar_estado()
-        for velocidad, aceleracion in (("0.1", 0.2), (0.1, "0.2"), (None, 0.2), (float("nan"), 0.2)):
+        for velocidad, aceleracion in (("0.1", 0.2), (0.1, "0.2"), (None, 0.2), (float("nan"), 0.2),
+                                       (1e-5, 0.2), (0.1, 1e-5)):        # 1e-5 se escribiria como '1e-05'
             with self.subTest(v=velocidad, a=aceleracion):
                 with self.assertRaises(ValueError):
                     self.robot.movej(Q, velocidad=velocidad, aceleracion=aceleracion)
