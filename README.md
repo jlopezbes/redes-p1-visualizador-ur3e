@@ -44,7 +44,7 @@ Parar con Ctrl+C. `ensenar` pide comandos en la consola: `g` guardar punto, `v` 
 **Pruebas** (no necesitan robot ni URSim):
 
 ```powershell
-python -B -m unittest discover -s 2_practicas\Practica1_visualizador_UR3e\pruebas -v          # 84 pruebas, ≈ 13 s
+python -B -m unittest discover -s 2_practicas\Practica1_visualizador_UR3e\pruebas -v          # 149 pruebas, ≈ 19 s
 python -u 2_practicas\Practica1_visualizador_UR3e\pruebas\humo_extremo_a_extremo.py          # main.py entero con ventana real
 ```
 
@@ -73,9 +73,11 @@ Comparación: [docs/desde-pi/comparacion-versiones-p1.md](../../docs/desde-pi/co
 
 ## 5. Estado y siguiente paso
 
-**Fase 1 hecha (2026-10-14):** código escrito por la IA a partir de `claude_2`, en módulos (`red.py` → `ur.py` → `tareas.py` + `simulador.py` + `secuencia.py`; ver [arquitectura](docs/arquitectura.md)), con 84 pruebas y probado de extremo a extremo contra un robot falso.
+**Fase 1 hecha (2026-10-14):** código escrito por la IA a partir de `claude_2`, en módulos (`red.py` → `ur.py` → `tareas.py` + `simulador.py` + `secuencia.py`; ver [arquitectura](docs/arquitectura.md)), y probado de extremo a extremo contra un robot falso.
 
-**Siguiente:** (1) Josu revisa el código y propone cambios en la sesión (decisiones D6–D9 son las que más conviene mirar); (2) probar con URSim y después con el UR3e (avisar antes de enviar `movej`); (3) comprobar a ojo la ventana de PyBullet (postura y convenio de ángulos, apartado 9 del enunciado); (4) Josu reorganiza el código a su gusto; (5) opcional: trayectoria suave entre puntos (hoy el robot se para en cada uno), ver «Mejoras posibles» en [arquitectura](docs/arquitectura.md).
+**Revisión de robustez hecha (2026-10-14, cuatro capas):** cada módulo tiene su excepción (`ErrorRed`, `ErrorUR`, `ErrorSecuencia`, `ErrorSimulador`), un q viejo no se presenta como actual, si el `stopj` no sale se avisa en mayúsculas, y `main.py` sale con códigos 0/1/2 (tabla en [arquitectura](docs/arquitectura.md)). 149 pruebas y el humo completo con la ventana real, todo contra robots falsos. Casos F7–F21 en [depuración](docs/depuración.md). El código creció de ≈ 545 a ≈ 800 líneas y Josu lo ve excesivo.
+
+**Siguiente:** (1) **poda** del código añadido por la auditoría, cuando Josu la pida (lista de candidatos en el informe C5 de la auditoría: ≈ 100–120 líneas de `src/` y ≈ 250 de tests); (2) Josu revisa el código y propone cambios (leer en este orden: `red.py` → `ur.py` → `simulador.py` → `secuencia.py` → `tareas.py` → `main.py`); (3) probar con URSim y después con el UR3e (avisar antes de enviar `movej`); (4) comprobar a ojo la ventana de PyBullet (postura y convenio de ángulos, apartado 9 del enunciado); (5) opcional: trayectoria suave entre puntos, ver «Mejoras posibles» en [arquitectura](docs/arquitectura.md). `src/robots.json` lo edita Josu (IP de robots del laboratorio): `varios` sin `--config` se conectará a ellos.
 
 ## Documentación de la práctica
 

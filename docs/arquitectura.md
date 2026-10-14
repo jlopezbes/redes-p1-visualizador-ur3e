@@ -50,7 +50,7 @@ Un mensaje de estado: `ConexionTCP.recibir()` → buffer de `ClienteUR` → `ext
 
 ## Errores del robot (contrato de `ur.py`)
 
-Una clase de excepción por módulo (D10): `ErrorRed` sale de `red.py` y se queda en `ur.py`; `ErrorUR` sale de `ur.py` y es lo único de `ur.py` que conocen `secuencia.py` y `tareas.py`; `ErrorSecuencia` y `ErrorSimulador` salen de sus módulos y las captura `tareas.py`. `ValueError`/`TypeError` solo significan «argumento mal puesto».
+Una clase de excepción por módulo (D10): `ErrorRed` sale de `red.py` y se queda en `ur.py`; `ErrorUR` sale de `ur.py` y es lo único de `ur.py` que conocen `secuencia.py` y `tareas.py`; `ErrorSecuencia` y `ErrorSimulador` salen de sus módulos y las convierte en mensaje y código de salida `main.py` (`tareas.py` solo captura `ErrorUR` en el bucle de `ensenar` y `ErrorSecuencia` al guardar y cargar). `ValueError`/`TypeError` solo significan «argumento mal puesto».
 
 | Situación | Qué ocurre |
 |---|---|
