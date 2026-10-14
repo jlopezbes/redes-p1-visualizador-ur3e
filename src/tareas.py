@@ -177,7 +177,7 @@ def ensenar_reproducir(ip, puerto=ur.UrPrimaria.PUERTO, velocidad=0.1, aceleraci
                     salir = True
                 if salir and rep.ocupado:
                     robot.stopj(rep.aceleracion)        # al salir no se deja el robot en marcha
-        except (OSError, ValueError, struct.error) as e:    # incluye ConnectionError y socket.timeout
+        except (ur.ErrorRed, ValueError, struct.error) as e:    # ErrorRed incluye el timeout y el cierre del robot
             print("Conexion perdida ({}). Reintentando en {} s...".format(e, ur.REINTENTO))
             rep.conexion_perdida()
             time.sleep(ur.REINTENTO)

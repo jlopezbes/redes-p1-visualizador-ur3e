@@ -161,7 +161,7 @@ class PruebasReproductor(Base):
         self.rep.ejecutar()
         self.bombear(lambda: self.rep.fase == secuencia.MOVIENDO)
         self.fake.cortar_clientes()
-        with self.assertRaises(OSError):
+        with self.assertRaises(ur.ErrorRed):
             self.bombear(lambda: False)
         self.rep.conexion_perdida()
         self.assertEqual(self.rep.fase, secuencia.PARADA)

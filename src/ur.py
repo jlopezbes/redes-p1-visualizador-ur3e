@@ -18,7 +18,7 @@ import math
 import struct
 import threading
 
-from red import ConexionTCP
+from red import ConexionTCP, ErrorRed      # ErrorRed se reexporta: las capas de arriba lo usan como ur.ErrorRed
 
 # ---- Primaria ----
 CABECERA = 5            # int32 (longitud) + uint8 (tipo)
@@ -167,7 +167,7 @@ class ClienteUR:
         raise NotImplementedError
 
     def _paquetes(self):
-        """Generador de paquetes completos. Lanza OSError (red) o ValueError (buffer desalineado)."""
+        """Generador de paquetes completos. Lanza ErrorRed (red) o ValueError (buffer desalineado)."""
         while True:
             self._buffer += self.red.recibir(65536)
             while True:
@@ -256,7 +256,7 @@ class LectorUR(threading.Thread):
                             self._recibidos += 1
                         if self._parar.is_set():
                             break
-            except (OSError, ValueError, struct.error) as e:
+            except (ErrorRed, ValueError, struct.error) as e:
                 print("[{}] DESCONECTADO ({}). Reintentando en {} s...".format(self.nombre, e, REINTENTO))
             with self._lock:
                 self._conectado = False

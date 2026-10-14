@@ -28,7 +28,7 @@ class RedGrabadora:
 
     def enviar(self, datos):
         if self.caida:
-            raise ConnectionError("conexion caida")
+            raise ur.ErrorRed("conexion caida")
         self.enviado.append(datos.decode("utf-8"))
 
 
@@ -197,7 +197,7 @@ class PruebasFallos(Base):
     def test_fallar_con_la_conexion_caida_no_revienta(self):
         self.preparar(B)
         self.rep.ejecutar()
-        self.robot.red.caida = True                                 # stopj fallara con OSError
+        self.robot.red.caida = True                                 # stopj fallara con ErrorRed
         self.estado(A, ejecutando=True, protegido=True)
         self.assertEqual(self.rep.fase, secuencia.PARADA)
 

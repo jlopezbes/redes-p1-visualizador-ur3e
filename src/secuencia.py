@@ -166,7 +166,7 @@ class Reproductor:
         print("*** SECUENCIA DETENIDA: {}".format(motivo))
         try:
             self.robot.stopj(self.aceleracion)
-        except OSError:
+        except ur.ErrorRed:
             pass
         self.fase = PARADA
         print("Escribe 'r' para reanudar desde el punto {} o 'c' para cancelar".format(self.i + 1))

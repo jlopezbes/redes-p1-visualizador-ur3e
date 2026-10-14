@@ -213,7 +213,7 @@ class PruebasClientes(unittest.TestCase):
         self.addCleanup(srv.cerrar)
         robot = ur.UrPrimaria("127.0.0.1", srv.puerto)
         with robot:
-            with self.assertRaises(ConnectionError):
+            with self.assertRaises(ur.ErrorRed):
                 next(robot.estados())       # llega medio mensaje y el servidor cierra
         with robot:                         # si el buffer no se vaciara, los 20 bytes viejos desalinearian todo
             self.assertTrue(casi_igual(next(robot.estados()), Q))
