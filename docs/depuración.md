@@ -2,7 +2,41 @@
 
 El profesor valora sobre todo saber depurar: cada fallo real queda como caso. Numeración fija F1, F2… con el más reciente arriba.
 
-Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F6 es de la fase 1 de `src/`. Cada uno dice qué se ejecutó y qué solo se leyó.
+Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F6 es de la fase 1 de `src/`; F7–F10 son de la revisión de robustez de la capa 1 (`red.py`). Cada uno dice qué se ejecutó y qué solo se leyó.
+
+## F10 – `timeout_lectura=None` o `0` en `ConexionTCP`: `recibir()` se cuelga para siempre o falla con un error raro (2026-10-14, `src/red.py`)
+
+- **Síntoma:** con `timeout_lectura=None`, `recibir()` contra un servidor que calla no vuelve nunca (el auditor lo dejó más de 100 s y tuvo que matar el proceso); con `0` sale `BlockingIOError [WinError 10035]`; con `nan`, `inf` o `'2'`, `ValueError`, `OverflowError` o `TypeError` crudos, y el socket recién creado queda sin cerrar.
+- **Causa:** `settimeout(None)` significa «sin límite» y `settimeout(0)` «no bloqueante»; el constructor no comprobaba nada. Hoy nadie pasa esos valores, pero la regla es «todo bloqueo tiene timeout».
+- **Arreglo:** el constructor exige timeouts numéricos con `0 < t <= 3600` s (`nan`, `inf`, `None`, `bool` y cadenas se rechazan solos con esa comparación) y lanza `ValueError` en español antes de tocar la red. Prueba: `test_timeout_no_valido`.
+- **Commit:** `e639b91`
+- **Para la defensa:** en Python `None` y `0` en un timeout no son «sin timeout» y «ninguno», significan «espera siempre» y «no esperes»; por eso se validan.
+
+## F9 – Los errores de socket llegaban crudos y `abierta` seguía en `True` (2026-10-14, `src/red.py`)
+
+- **Síntoma:** según la causa salían `ConnectionRefusedError`, `ConnectionResetError`, `ConnectionAbortedError`, `gaierror`, `socket.timeout` u `OSError` con mensajes de Windows sin decir de qué robot se trataba. Tras un RST o un `OSError`, `ConexionTCP.abierta` seguía diciendo `True`. Llamar a `abrir()` dos veces dejaba el primer socket abierto y sin dueño.
+- **Aislamiento:** ✅ el auditor reprodujo cada caso contra servidores falsos propios en `127.0.0.1` (RST con `SO_LINGER` a 0, cierre limpio, doble `abrir()`); las pruebas nuevas repiten RST, cierre remoto y doble `abrir()`.
+- **Causa:** `red.py` no traducía nada: cada capa de arriba tenía que conocer `socket` y `OSError`, y nadie cerraba el socket tras un error fatal.
+- **Arreglo:** una jerarquía propia, `ErrorRed` y `ErrorRedTimeout` (D10). Cualquier fallo de `abrir`, `enviar` o `recibir` sale como `ErrorRed` con `ip:puerto`; cualquier fallo salvo un timeout de lectura cierra la conexión (`_perdida`), así que `abierta` es fiable; `abrir()` empieza llamando a `cerrar()`. Los llamadores (`ur.LectorUR`, `tareas.ensenar_reproducir`, `Reproductor._fallar`) pasan a capturar `ErrorRed`. Pruebas: `test_reset_del_otro_lado_es_errorred_y_cierra`, `test_cierra_el_otro_lado`, `test_puerto_cerrado_es_errorred`, `test_abrir_dos_veces_no_deja_un_socket_suelto`.
+- **Limitación que queda:** si el robot cierra, el primer `enviar()` **no falla** (TCP lo acepta); falla el siguiente o el `recibir()`. «Enviado sin error» no quiere decir «el robot lo ha recibido» (misma lección que F6). Prueba: `test_enviar_tras_cierre_remoto_acaba_en_errorred`.
+- **Commit:** `e639b91`
+
+## F8 – `cerrar()` desde otro hilo hacía fallar a `recibir()` con un `OSError` crudo (2026-10-14, `src/red.py`)
+
+- **Síntoma:** si otro hilo llamaba a `cerrar()` mientras el hilo lector estaba en `recibir()`, este recibía `OSError [WinError 10038]` («no es un socket») crudo (1500 de 1500 intentos del auditor). Con mala suerte entre `if not self.abierta` y `self._socket.recv(...)` el otro hilo ponía `_socket = None` y salía `AttributeError: 'NoneType' object has no attribute 'recv'`, que `LectorUR` no captura y mataba el hilo en silencio (este segundo caso solo se reprodujo forzando el cambio de hilo, no con hilos reales).
+- **Causa:** `enviar` y `recibir` comprobaban `self.abierta` y luego usaban `self._socket` por separado: entre las dos lecturas el valor puede cambiar.
+- **Arreglo:** se copia `self._socket` a una variable local una sola vez (`_socket_abierto`) y se usa solo esa; `cerrar()` intercambia `_socket` por `None` de una vez. El `OSError` del cierre ajeno se convierte en `ErrorRed`. En Windows `cerrar()` ya despierta de inmediato a un `recibir()` bloqueado, así que no hace falta `shutdown`. Prueba: `test_cerrar_desde_otro_hilo_despierta_a_recibir_con_errorred` (tarda < 2 s con un timeout de 5 s).
+- **Commit:** `e639b91`
+- **Para la defensa:** «comprobar y luego usar» no es seguro entre hilos; se lee la variable una vez y se trabaja con la copia.
+
+## F7 – Un puerto fuera de 0–65535 conectaba con OTRO puerto (2026-10-14, `src/red.py`)
+
+- **Síntoma:** `ConexionTCP("127.0.0.1", 32002 + 65536).abrir()` no da error: se conecta al puerto 32002. Con `--puerto 95537` el programa habla con el 30001 creyendo que usa otro. `None`, `0`, `3.5` o `"abc"` daban errores crudos distintos; `ip=None` conectaba en silencio a `127.0.0.1`.
+- **Aislamiento:** ✅ ejecutado hoy: con un servidor en `127.0.0.1:32002`, `socket.create_connection(("127.0.0.1", 97538))` conecta (97538 = 32002 + 65536).
+- **Causa:** Windows recorta el puerto a 16 bits y `create_connection` no lo comprueba; y `ConexionTCP` no validaba lo que viene de la línea de comandos o de `robots.json`.
+- **Arreglo:** el constructor valida: IP literal (`ipaddress.ip_address`, sin nombres de host: así tampoco hay espera de DNS, D10), puerto entero entre 1 y 65535 (sin `bool`), y `ValueError` en español. Pruebas: `test_ip_no_valida`, `test_puerto_no_valido`.
+- **Commit:** `e639b91`
+- **Consecuencia:** una IP o un puerto mal escritos ahora son un `ValueError` al crear el cliente; `main.py` todavía no lo muestra como un error de argumento limpio (queda para la capa 4).
 
 ## F6 – Una prueba falla «a veces»: el `stopj` todavía no ha llegado al robot (2026-10-14, `src/`)
 

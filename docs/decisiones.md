@@ -2,7 +2,7 @@
 
 Numeración fija: D1, D2… (nunca se renumera). Cada una lleva contexto, opciones, la elegida y por qué, y la marca **«distinto»** si se aparta de lo que pide el enunciado o de lo que haría la clase: esas son la materia prima de la memoria.
 
-D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14. D6–D9 son de esa misma sesión (fase 1: código escrito por la IA, pendiente de revisión de Josu).
+D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14. D6–D9 son de esa misma sesión (fase 1: código escrito por la IA, pendiente de revisión de Josu). D10–D11 son de la revisión de robustez (capa 1, `red.py`).
 
 ## D1 – Un solo módulo de protocolo, reutilizado por todos los scripts
 
@@ -75,3 +75,19 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Elegida:** (b). **Porque** hay un solo bucle de dibujo y de reconexión que depurar. Coste: con un solo robot también se usa un hilo, y las líneas de información salen una vez por segundo (`[robot] 10 estados/s | q (grados): ...`) en lugar de en cada mensaje.
 - **Distinto:** no.
 - **Commit:** `800dd7d`
+
+## D10 – Una sola jerarquía de excepciones de red: `ErrorRed` y `ErrorRedTimeout`
+
+- **Contexto:** los errores de socket salían crudos y de seis tipos distintos (F9), y las capas de arriba capturaban `OSError`, `ConnectionError` o `socket.timeout`. El objetivo es que los errores se resuelvan en la capa más baja y que las de arriba solo conozcan las excepciones de la inmediatamente inferior.
+- **Opciones:** (a) dejar `OSError` y mejorar solo los mensajes; (b) `ErrorRed(OSError)`, que no obligaría a cambiar a los llamadores; (c) `ErrorRed(Exception)` independiente, con `ErrorRedTimeout(ErrorRed)` para «no llegó nada en `timeout_lectura` s».
+- **Elegida:** (c), en `red.py`. **Porque** con (b) cualquier `OSError` ajeno (p. ej. al guardar un fichero) seguiría pareciendo «un fallo de conexión», que es justo el equívoco que `tareas.py` ya tenía que evitar con un comentario. `ErrorRedTimeout` existe porque la capa de arriba necesita distinguir «el robot calla, sigue conectado» (la conexión sigue abierta) de «se perdió la conexión» (se cierra). Los módulos de arriba la usan como `ur.ErrorRed` (`ur.py` la reexporta: es la misma clase, no una copia). Toda conexión perdida cierra el socket, de modo que `abierta` es fiable.
+- **Distinto:** no (el enunciado no dice nada).
+- **Commit:** `e639b91`
+
+## D11 – `ConexionTCP` valida sus argumentos y solo acepta IPs, no nombres
+
+- **Contexto:** IP y puerto llegan de la línea de comandos y de `robots.json`; los valores raros daban errores distintos o, peor, conectaban a otro puerto o a `127.0.0.1` en silencio (F7). Resolver un nombre puede bloquear el hilo decenas de segundos y `timeout_conexion` no lo limita.
+- **Opciones:** (a) validar fuera, en `main.py` y en `cargar_robots`; (b) validar en `ConexionTCP.__init__`, el único punto por el que pasan todos; (c) además, permitir nombres de host.
+- **Elegida:** (b) sin (c): `ip` es una IP literal (`ipaddress.ip_address`), `puerto` un entero entre 1 y 65535 y los timeouts números con `0 < t <= 3600` s; si no, `ValueError` en español al crear el objeto. **Porque** hay una sola comprobación y los robots del laboratorio se dan por IP. Coste: `--ip localhost` ya no vale, hay que escribir `127.0.0.1`.
+- **Distinto:** no.
+- **Commit:** `e639b91`

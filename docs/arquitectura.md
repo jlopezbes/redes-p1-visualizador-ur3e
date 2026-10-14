@@ -9,7 +9,7 @@ Versión final en `src/` (fase 1: código escrito por la IA a partir de `claude_
 | `src/main.py` | `main()`, `crear_parser()` | Punto de entrada: lee los argumentos (`primaria`, `tiempo-real`, `varios`, `ensenar`) y llama a la tarea. |
 | `src/tareas.py` | `visualizar_primaria`, `visualizar_tiempo_real`, `visualizar_varios`, `ensenar_reproducir`, `cargar_robots` | Las cuatro tareas de la práctica como **funciones** que juntan los controladores. Aquí vive el bucle de dibujo y la consola de enseñar. |
 | `src/ur.py` | clases `ClienteUR`, `UrPrimaria`, `UrTiempoReal`, `LectorUR` y las funciones de decodificación | **Habla con el UR** usando `ConexionTCP`: corta los bytes en mensajes, los decodifica y envía `movej`/`stopj`. |
-| `src/red.py` | clase `ConexionTCP` | **Red pura**: abrir, cerrar, enviar y recibir por TCP con timeouts. No conoce el protocolo del UR. |
+| `src/red.py` | clases `ConexionTCP`, `ErrorRed`, `ErrorRedTimeout` | **Red pura**: abrir, cerrar, enviar y recibir por TCP con timeouts. No conoce el protocolo del UR. Valida sus argumentos y **traduce todo fallo de socket a `ErrorRed`** (D10, D11): las capas de arriba no conocen `socket` ni `OSError`. |
 | `src/simulador.py` | clase `Simulador` | Envuelve `UR3eRG2` (PyBullet): robots por nombre, posición de la base, `mover` y `previsualizar`. |
 | `src/secuencia.py` | clases `Secuencia`, `Reproductor` | Enseñar y reproducir: la lista de puntos (JSON) y la máquina de estados que envía un `movej` por punto y vigila errores. |
 | `src/robots.json` | datos | Robots de `visualizar_varios`: nombre, IP, puerto y posición de la base. |
@@ -35,6 +35,19 @@ python src\main.py <orden>
 
 Un mensaje de estado: `ConexionTCP.recibir()` → buffer de `ClienteUR` → `extraer_mensaje` (corta por longitud) → `leer_estado` (decodifica `q`, `ejecutando`, `protegido`) → `Simulador.mover()`.
 
+## Errores de red (contrato de `red.py`)
+
+| Situación | Qué ocurre | Conexión |
+|---|---|---|
+| IP, puerto o timeouts no válidos al crear `ConexionTCP` | `ValueError` en español (no se toca la red) | — |
+| `abrir()` rechazada, sin ruta o sin respuesta | `ErrorRed` (o `ErrorRedTimeout` si no contesta) con `ip:puerto` | sin abrir |
+| `recibir()` sin datos en `timeout_lectura` s | `ErrorRedTimeout` | **sigue abierta** |
+| `recibir()`: el otro lado cierra o hay un RST; `enviar()` falla | `ErrorRed` | se **cierra** (`abierta` pasa a `False`) |
+| `enviar()`/`recibir()` con la conexión cerrada, también si la cerró otro hilo | `ErrorRed` | — |
+| `recibir(maximo)` con `maximo` fuera de 1–1 048 576, `enviar()` con algo que no es `bytes` | `ValueError` / `TypeError` (error de programación) | no cambia |
+
+`cerrar()` se puede llamar varias veces y desde otro hilo. Si el otro extremo cierra, el primer `enviar()` puede no fallar (TCP lo acepta): fallará el siguiente o el `recibir()`. `ur.py` reexporta `ErrorRed` y `ur.LectorUR`, `tareas.ensenar_reproducir` y `Reproductor._fallar` lo capturan; `ValueError` y `struct.error` siguen siendo del decodificador.
+
 ## Hilos y concurrencia
 
 | Tarea | Hilos | Qué comparten y cómo |
@@ -51,7 +64,9 @@ Un mensaje de estado: `ConexionTCP.recibir()` → buffer de `ClienteUR` → `ext
 | `ur.py` | `VELOCIDAD_MAX` / `ACELERACION_MAX` | 0,3 / 0,5 | rad/s / rad/s² | Límite de `movej`: se niega a enviar más (robot real). |
 | `ur.py` | `REINTENTO` | 2,0 | s | Espera entre reconexiones. |
 | `ur.py` | `TAM_SUB_JOINTS`, `OFFSET_Q_ACTUAL` | 251, 252 | bytes | Formato esperado; avisa o falla si el robot manda otro. |
-| `red.py` | `timeout_conexion` / `timeout_lectura` | 5,0 / 2,0 | s | Parámetros de `ConexionTCP`. |
+| `red.py` | `timeout_conexion` / `timeout_lectura` | 5,0 / 2,0 | s | Parámetros de `ConexionTCP`; deben cumplir `0 < t <= MAX_TIMEOUT`. |
+| `red.py` | `MAX_TIMEOUT` | 3600 | s | Timeout máximo aceptado (un valor mayor, `None`, `nan` o `inf` es un error). |
+| `red.py` | `MAX_RECIBIR` | 1 048 576 | bytes | Tope del argumento de `recibir(maximo)`. |
 | `tareas.py` | `HZ_DIBUJO`, `PERIODO_INFO` | 30, 1,0 | Hz, s | Ritmo de dibujo y de las líneas de información. |
 | `secuencia.py` | `TOLERANCIA`, `ESPERA_ARRANQUE` | 0,01, 2,0 | rad, s | Cuándo se da un punto por alcanzado y cuánto se espera a que arranque el programa. |
 | `main.py` | `--v`, `--a` (solo `ensenar`) | 0,1 / 0,2 | rad/s / rad/s² | Velocidad y aceleración de cada `movej`. |
