@@ -18,7 +18,7 @@ import threading
 import time
 
 import ur
-from secuencia import Reproductor, Secuencia
+from secuencia import ErrorSecuencia, Reproductor, Secuencia
 from simulador import Simulador
 
 HZ_DIBUJO = 30            # veces por segundo que se redibuja el simulador
@@ -135,13 +135,13 @@ def _comando(linea, rep, simulador):
         try:
             rep.secuencia.guardar(fichero)
             print("{} puntos guardados en {}".format(len(rep.secuencia), fichero))
-        except OSError as e:        # sin esto pareceria un fallo de conexion
+        except ErrorSecuencia as e:
             print("No se pudo guardar: {}".format(e))
     elif orden == "l":
         try:
             rep.secuencia.cargar(fichero)
             print("{} puntos cargados de {}".format(len(rep.secuencia), fichero))
-        except (OSError, ValueError, TypeError) as e:
+        except ErrorSecuencia as e:
             print("No se pudo cargar: {}".format(e))
     else:
         print(AYUDA)

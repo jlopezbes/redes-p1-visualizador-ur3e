@@ -4,10 +4,13 @@ La prueba con la libreria real esta en pruebas/humo_pybullet.py.
 
     python -B -m unittest discover -s 2_practicas\\Practica1_visualizador_UR3e\\pruebas -v
 """
+import sys
 import unittest
+from unittest import mock
 
 import ayudas  # noqa: F401  (pone src/ en sys.path)
-from simulador import Simulador
+import simulador
+from simulador import ErrorSimulador, Simulador
 
 
 class VisualizadorFalso:
@@ -61,7 +64,7 @@ class PruebasSimulador(unittest.TestCase):
             self.sim.agregar_robot("robot1")
 
     def test_robot_desconocido(self):
-        with self.assertRaises(KeyError):
+        with self.assertRaises(ValueError):
             self.sim.mover("nadie", [0.0] * 6)
 
     def test_previsualizar_recorre_todos_los_tramos_y_acaba_en_cada_punto(self):
@@ -78,6 +81,72 @@ class PruebasSimulador(unittest.TestCase):
         self.sim.agregar_robot("robot1")
         self.sim.previsualizar("robot1", [0.0] * 6, [])
         self.assertEqual(self.visualizador.movimientos, [])
+
+
+class VisualizadorQueFalla(VisualizadorFalso):
+    """Imita una ventana de PyBullet cerrada por el usuario."""
+
+    def move_robot(self, robot_id, joint_values):
+        raise RuntimeError("Not connected to physics server.")
+
+    def spawn_robot(self, pose):
+        raise RuntimeError("Not connected to physics server.")
+
+
+class PruebasSimuladorRobusto(unittest.TestCase):
+    def setUp(self):
+        self.visualizador = VisualizadorFalso()
+        self.sim = Simulador(self.visualizador)
+        self.sim.agregar_robot("robot1")
+
+    def test_un_fallo_de_la_libreria_sale_como_errorsimulador(self):
+        sim = Simulador(VisualizadorQueFalla())
+        sim.agregar_robot("robot1")
+        with self.assertRaises(ErrorSimulador):
+            sim.mover("robot1", [0.1] * 6)
+        with self.assertRaises(ErrorSimulador):
+            sim.agregar_robot("robot2")                 # spawn_robot falla
+
+    def test_sin_la_libreria_ur3e_rg2_sale_errorsimulador(self):
+        bloqueo = {"UR3e_rg2": None, "UR3e_rg2.dynamic_ur3e": None}     # None en sys.modules: el import falla
+        with mock.patch.dict(sys.modules, bloqueo):
+            with self.assertRaises(ErrorSimulador) as e:
+                Simulador()
+        self.assertIn("UR3e_rg2", str(e.exception))
+
+    def test_el_primer_robot_fuera_del_origen_sin_pybullet_conectado_sale_errorsimulador(self):
+        sim = Simulador(VisualizadorFalso())            # no hay ventana PyBullet: la libreria real falla
+        with self.assertRaises(ErrorSimulador):
+            sim.agregar_robot("robot1", [1.0, 0, 0, 0, 0, 0])
+
+    def test_q_no_valido_es_valueerror_y_no_llega_a_la_libreria(self):
+        for q in ([float("nan")] * 6, [float("inf")] * 6, [1e300] * 6, [90.0] * 6, [0.1] * 5, [0.1] * 7, [],
+                  ["a"] * 6):
+            with self.subTest(q=q):
+                with self.assertRaises(ValueError):
+                    self.sim.mover("robot1", q)
+        self.assertEqual(self.visualizador.movimientos, [])
+
+    def test_posicion_de_la_base_no_valida(self):
+        for posicion in ([float("nan")] + [0] * 5, [0] * 5, [], ["x"] * 6, [1e9] + [0] * 5):
+            with self.subTest(posicion=posicion):
+                with self.assertRaises(ValueError):
+                    self.sim.agregar_robot("otro", posicion)
+        self.assertEqual(self.visualizador.creados, [])
+
+    def test_cerrar_es_idempotente_y_funciona_con_with(self):
+        with Simulador(VisualizadorFalso()) as sim:
+            sim.agregar_robot("robot1")
+        sim.cerrar()
+        sim.cerrar()                                    # cerrar dos veces no falla
+
+    def test_la_vista_previa_tiene_tope_de_duracion(self):
+        esperas = []
+        falso = mock.Mock()
+        falso.sleep = esperas.append
+        with mock.patch.object(simulador, "time", falso):
+            self.sim.previsualizar("robot1", [0.0] * 6, [[0.1] * 6] * 100, pasos=2, duracion_tramo=1.0)
+        self.assertLessEqual(sum(esperas), simulador.MAX_PREVIEW + 1e-6)         # sin tope serian 100 s
 
 
 if __name__ == "__main__":
