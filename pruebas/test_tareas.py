@@ -51,9 +51,9 @@ class PruebasCargarRobots(unittest.TestCase):
         return ruta
 
     def test_el_robots_json_de_src_es_valido(self):
+        # Solo que cargue y sea valido: las IP y los puertos los cambia Josu segun el robot que use (no se fijan aqui).
         robots = tareas.cargar_robots(os.path.join(CARPETA_SRC, "robots.json"))
-        self.assertEqual([r["nombre"] for r in robots], ["robot1", "robot2"])
-        self.assertEqual([r["puerto"] for r in robots], [30001, 30011])
+        self.assertGreaterEqual(len(robots), 1)
 
     def test_tolera_el_bom_del_bloc_de_notas(self):
         robots = tareas.cargar_robots(self.escribir(
