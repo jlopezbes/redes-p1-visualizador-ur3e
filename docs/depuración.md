@@ -2,7 +2,16 @@
 
 El profesor valora sobre todo saber depurar: cada fallo real queda como caso. Numeración fija F1, F2… con el más reciente arriba.
 
-Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F6 es de la fase 1 de `src/`; F7–F10 son de la revisión de robustez de la capa 1 (`red.py`) y F11–F14 de la capa 2 (`ur.py`) F15–F19 de la capa 3 (`secuencia.py`, `simulador.py`) y F20 de la capa 4 (`main.py`, `tareas.py`). Cada uno dice qué se ejecutó y qué solo se leyó.
+Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F6 es de la fase 1 de `src/`; F7–F10 son de la revisión de robustez de la capa 1 (`red.py`) y F11–F14 de la capa 2 (`ur.py`) F15–F19 de la capa 3 (`secuencia.py`, `simulador.py`) F20 de la capa 4 (`main.py`, `tareas.py`) y F21 de la ejecución real con ventana tras las cuatro capas. Cada uno dice qué se ejecutó y qué solo se leyó.
+
+## F21 – `ensenar` se quedaba mudo: el hilo de consola bloqueaba la apertura de la ventana de PyBullet (2026-10-14, `src/tareas.py`)
+
+- **Síntoma:** `humo_extremo_a_extremo.py` daba 6 FALLOS en `ensenar` (`g`, `l`, `e`...) y el programa no imprimía ni «Conectado a ...»; seguía vivo, pero solo se veía `pybullet build time`. Las pruebas unitarias (149) pasaban: usan un simulador falso sin ventana.
+- **Aislamiento:** un script de diagnóstico con el robot falso mostró el proceso vivo y mudo tras 3 s. El diff de la capa 4 (`5150baf`) mostró que `threading.Thread(_leer_consola).start()` había quedado **antes** de `Simulador()`; antes de la auditoría iba después.
+- **Causa:** con un `input()` ya bloqueado en otro hilo, la ventana de PyBullet no termina de abrirse (Windows; causa exacta no investigada, la prueba es empírica).
+- **Arreglo:** arrancar el hilo de consola justo después de `simulador.agregar_robot(...)`, con un comentario que lo explica.
+- **Lección:** una prueba con simulador falso no demuestra que la ventana real funcione: hay que ejecutar el humo al cerrar cada capa.
+- **Commit:** el de esta corrección (ver `git log`).
 
 ## F20 – Configuración mala, Ctrl+C y consola cerrada acababan en traceback, con la ventana abierta y el robot en marcha (2026-10-14, `src/main.py`, `src/tareas.py`)
 

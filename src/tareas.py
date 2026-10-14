@@ -163,10 +163,11 @@ def ensenar_reproducir(ip, puerto=ur.UrPrimaria.PUERTO, velocidad=0.1, aceleraci
     robot = ur.UrPrimaria(ip, puerto)
     rep = Reproductor(robot, Secuencia(), velocidad, aceleracion)
     comandos = queue.Queue()
-    threading.Thread(target=_leer_consola, args=(comandos,), daemon=True).start()
     try:
         with Simulador() as simulador:
             simulador.agregar_robot("robot")
+            # La consola se lee DESPUES de abrir la ventana: un input() ya bloqueado impide que PyBullet termine de abrirla.
+            threading.Thread(target=_leer_consola, args=(comandos,), daemon=True).start()
             salir = False
             while not salir:                     # si se cae la conexion se vuelve a intentar
                 try:
