@@ -2,7 +2,7 @@
 
 Numeración fija: D1, D2… (nunca se renumera). Cada una lleva contexto, opciones, la elegida y por qué, y la marca **«distinto»** si se aparta de lo que pide el enunciado o de lo que haría la clase: esas son la materia prima de la memoria.
 
-D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14. D6–D9 son de esa misma sesión (fase 1: código escrito por la IA, pendiente de revisión de Josu). D10–D11 son de la revisión de robustez de la capa 1 (`red.py`) D12–D13 de la capa 2 (`ur.py`) y D14–D15 de la capa 3 (`secuencia.py`, `simulador.py`).
+D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14. D6–D9 son de esa misma sesión (fase 1: código escrito por la IA, pendiente de revisión de Josu). D10–D11 son de la revisión de robustez de la capa 1 (`red.py`) D12–D13 de la capa 2 (`ur.py`) D14–D15 de la capa 3 (`secuencia.py`, `simulador.py`) y D16 de la capa 4 (`main.py`, `tareas.py`).
 
 ## D1 – Un solo módulo de protocolo, reutilizado por todos los scripts
 
@@ -133,3 +133,10 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Elegida:** (b). Topes: 1 MB y 1000 puntos por fichero, cada punto una lista de 6 números en ±2π; `guardar` escribe en `ruta.tmp` y `os.replace`. El simulador acepta `q` en ±(2π + 0,2) rad (el mismo `LIMITE_Q_LECTURA` de `ur.py`) y una base en ±100 m/rad, y limita la vista previa a `MAX_PREVIEW` = 20 s. **Porque** así la comprobación está en un solo sitio y las capas de arriba reciben un `ErrorSecuencia`/`ErrorSimulador` con el motivo en español, no un traceback.
 - **Distinto:** no.
 - **Commit:** `0cff77d`
+
+## D16 – Una sola salida de errores en `main()` y un solo `try/finally` en `ensenar_reproducir`
+
+- **Contexto:** hasta la capa 3 los errores esperados llegaban a `main.py` como traceback (F20).
+- **Elegida:** primero se crean los clientes y después el `Simulador` dentro de `with`, así un argumento malo falla antes de abrir la ventana sin escribir más validadores. `main()` traduce a una línea `Error: ...` en stderr: `ValueError`/`OSError` (argumentos, `robots.json`) -> código **2**; `ErrorUR`/`ErrorSimulador`/`ErrorSecuencia` -> **1**; Ctrl+C -> **0** (es la forma normal de parar); un fallo inesperado -> traceback y **1** (último `except Exception` de la aplicación). `ensenar_reproducir` cierra el robot en un `finally`, tras frenarlo si se mueve, en cualquier salida (`q`, Ctrl+C, ventana cerrada, bug); en vez de `time.sleep`, la reconexión espera con `comandos.get(timeout=ur.REINTENTO)`, y un EOF de la consola equivale a `q`. Se rechazan `b`, `l` y `g` con la secuencia parada o en espera.
+- **Distinto:** no.
+- **Commit:** `5150baf`

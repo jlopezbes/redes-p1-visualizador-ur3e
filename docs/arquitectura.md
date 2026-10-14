@@ -77,7 +77,13 @@ Una clase de excepción por módulo (D10): `ErrorRed` sale de `red.py` y se qued
 | `Simulador`: falta `UR3e_rg2`, ventana cerrada, `pybullet.error` | `ErrorSimulador` |
 | `Simulador.mover`/`agregar_robot` con `q` o posición no válidos, o un robot que no existe | `ValueError` |
 
-**Para la capa de `main.py` (C4):** `ConexionTCP` lanza `ValueError` si la IP, el puerto o los timeouts no son válidos; por eso `main.py` debe validar `--ip`, `--puerto` y `robots.json` **antes** de abrir la ventana y de crear las conexiones, y mostrar el motivo en español.
+**Configuración (`main.py`, `tareas.py`):** `ConexionTCP` lanza `ValueError` si la IP, el puerto o los timeouts no son válidos; las tareas crean los clientes **antes** que el `Simulador`, así que el error salta antes de abrir la ventana. `cargar_robots` solo comprueba su estructura (lista no vacía, campos, nombres únicos); la posición la valida el `Simulador`.
+
+| Código de salida | Cuándo |
+|---|---|
+| 0 | Fin normal o Ctrl+C |
+| 1 | `ErrorUR`, `ErrorSimulador`, `ErrorSecuencia` o un fallo inesperado del programa (con traceback) |
+| 2 | Argumentos o `robots.json` mal puestos (`ValueError`/`OSError`, o `argparse`) |
 
 ## Hilos y concurrencia
 
@@ -129,7 +135,6 @@ Primero se probaría en URSim, nunca en el UR3e directamente.
 - El formato de 251 B del subpaquete de articulaciones y el offset 252 del tiempo real **no están verificados con un robot real**; si un robot manda otro tamaño, `ur.py` lanza `ErrorUR` en lugar de adivinar.
 - `Simulador.previsualizar` bloquea el hilo principal unos segundos: durante ese tiempo los mensajes del robot se acumulan y, al terminar, se procesan de golpe (el robot simulado salta por posiciones atrasadas un instante). Es el comportamiento de `claude_2`; no se ha medido con un robot real.
 - `Reproductor` en `MOVIENDO` no tiene vigilante de tiempo: si `isProgramRunning` no baja nunca (programa pausado en el pendant), espera hasta que el usuario cancele con `c`. No se avisa por duración (D14).
-- `b`, `l` y `g` siguen aceptándose con el `Reproductor` en `PARADA`: el `Reproductor` ya no revienta si la secuencia cambia (avisa «la secuencia ha cambiado»), pero **no se impide** el cambio (queda para la capa 4, en `tareas.py`).
 - `Simulador.cerrar()` llama a `pybullet.disconnect()`: **no se ha comprobado con la ventana real** (no se abren ventanas al probar). Si la librería real no cierra así, la ventana depende de que acabe el proceso.
 - El modo del robot (`robotMode`) no bloquea ningún movimiento porque su decodificación no está verificada con un robot real.
 - `UR3eRG2` abre siempre la ventana (`gui=True` fijo): no se puede ejecutar sin pantalla.

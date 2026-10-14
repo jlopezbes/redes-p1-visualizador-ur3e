@@ -2,7 +2,14 @@
 
 El profesor valora sobre todo saber depurar: cada fallo real queda como caso. Numeración fija F1, F2… con el más reciente arriba.
 
-Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F6 es de la fase 1 de `src/`; F7–F10 son de la revisión de robustez de la capa 1 (`red.py`) y F11–F14 de la capa 2 (`ur.py`) y F15–F19 de la capa 3 (`secuencia.py`, `simulador.py`). Cada uno dice qué se ejecutó y qué solo se leyó.
+Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F6 es de la fase 1 de `src/`; F7–F10 son de la revisión de robustez de la capa 1 (`red.py`) y F11–F14 de la capa 2 (`ur.py`) F15–F19 de la capa 3 (`secuencia.py`, `simulador.py`) y F20 de la capa 4 (`main.py`, `tareas.py`). Cada uno dice qué se ejecutó y qué solo se leyó.
+
+## F20 – Configuración mala, Ctrl+C y consola cerrada acababan en traceback, con la ventana abierta y el robot en marcha (2026-10-14, `src/main.py`, `src/tareas.py`)
+
+- **Síntoma:** `--puerto 99999`, `--ip localhost` o un `robots.json` malo salían con traceback **después** de abrir la ventana; la ventana no se cerraba nunca; si se cerraba la ventana con el robot moviéndose no se enviaba `stopj`; Ctrl+C durante la reconexión (`time.sleep`) daba traceback; con el robot caído `q` no salía y un EOF (Ctrl+Z) dejaba el programa sin consola.
+- **Aislamiento:** ✅ reproducido por el auditor con envoltorios sin ventana y robots falsos; las pruebas nuevas (`PruebasMain`, `PruebasTareasConRobotFalso`) repiten los casos.
+- **Arreglo:** los clientes se crean antes que el `Simulador` (`ConexionTCP` ya valida IP y puerto) y este va en `with`; `main()` tiene un solo bloque de captura con los códigos 2/1/0 (D16); `ensenar_reproducir` tiene un solo `try/finally` que hace `rep.cancelar()` si el robot se mueve; la espera de reconexión es `comandos.get(timeout=...)` y un EOF pone `q` en la cola; `b`, `l` y `g` se rechazan con la secuencia parada o en espera.
+- **Commit:** `5150baf`
 
 ## F19 – La ventana de PyBullet cerrada o un valor absurdo hacían caer el programa con un error de la librería (2026-10-14, `src/simulador.py`)
 
