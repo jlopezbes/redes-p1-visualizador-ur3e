@@ -143,7 +143,7 @@ class Reproductor:
         punto = self.secuencia.puntos[self.i]
         try:
             self.robot.movej(punto, velocidad=self.velocidad, aceleracion=self.aceleracion)
-        except ValueError as e:
+        except (ValueError, ur.ErrorUR) as e:       # punto/velocidad no validos, o sin estado fresco / sin conexion
             self._fallar("punto {}: {}".format(self.i + 1, e))
             return
         self.fase = ENVIADO
@@ -166,7 +166,7 @@ class Reproductor:
         print("*** SECUENCIA DETENIDA: {}".format(motivo))
         try:
             self.robot.stopj(self.aceleracion)
-        except ur.ErrorRed:
+        except ur.ErrorUR:              # si no hay conexion no se puede frenar por aqui: se avisa abajo y ya
             pass
         self.fase = PARADA
         print("Escribe 'r' para reanudar desde el punto {} o 'c' para cancelar".format(self.i + 1))

@@ -15,6 +15,7 @@ from unittest import mock
 import ayudas
 import secuencia
 import ur
+from red import ErrorRed
 
 A = [0.0, -1.0, 0.0, -1.0, 0.0, 0.0]       # primer punto
 B = [0.5, -1.0, 0.2, -1.0, 0.0, 0.3]        # segundo punto
@@ -28,7 +29,7 @@ class RedGrabadora:
 
     def enviar(self, datos):
         if self.caida:
-            raise ur.ErrorRed("conexion caida")
+            raise ErrorRed("conexion caida")
         self.enviado.append(datos.decode("utf-8"))
 
 
@@ -53,6 +54,7 @@ class Base(unittest.TestCase):
 
         self.robot = ur.UrPrimaria("127.0.0.1")
         self.robot.red = RedGrabadora()
+        self.robot.marcar_estado()          # movej exige un estado fresco
         self.seq = secuencia.Secuencia()
         self.rep = secuencia.Reproductor(self.robot, self.seq, velocidad=0.1, aceleracion=0.2)
 

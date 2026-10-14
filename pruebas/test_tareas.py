@@ -69,6 +69,7 @@ class PruebasComandos(unittest.TestCase):
 
         self.robot = ur.UrPrimaria("127.0.0.1")
         self.robot.red = RedGrabadora()
+        self.robot.marcar_estado()          # movej exige un estado fresco
         self.rep = secuencia.Reproductor(self.robot, secuencia.Secuencia(), velocidad=0.1, aceleracion=0.2)
         self.sim = SimuladorFalso()
 

@@ -60,6 +60,7 @@ class PruebasLectura(Base):
     def test_movej_llega_al_punto(self):
         punto = con_offset(Q_INICIAL, 0, 0.3)
         with ur.UrPrimaria("127.0.0.1", self.fake.puerto) as robot:
+            next(robot.estados())               # movej exige haber recibido antes un estado
             robot.movej(punto, velocidad=0.3, aceleracion=0.5)
             for q in robot.estados():
                 if casi_igual(q, punto):
@@ -161,7 +162,7 @@ class PruebasReproductor(Base):
         self.rep.ejecutar()
         self.bombear(lambda: self.rep.fase == secuencia.MOVIENDO)
         self.fake.cortar_clientes()
-        with self.assertRaises(ur.ErrorRed):
+        with self.assertRaises(ur.ErrorUR):
             self.bombear(lambda: False)
         self.rep.conexion_perdida()
         self.assertEqual(self.rep.fase, secuencia.PARADA)

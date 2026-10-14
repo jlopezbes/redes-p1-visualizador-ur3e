@@ -14,7 +14,6 @@ PyBullet solo se toca desde el hilo que llama a estas funciones; los hilos de ur
 import json
 import math
 import queue
-import struct
 import threading
 import time
 
@@ -177,7 +176,7 @@ def ensenar_reproducir(ip, puerto=ur.UrPrimaria.PUERTO, velocidad=0.1, aceleraci
                     salir = True
                 if salir and rep.ocupado:
                     robot.stopj(rep.aceleracion)        # al salir no se deja el robot en marcha
-        except (ur.ErrorRed, ValueError, struct.error) as e:    # ErrorRed incluye el timeout y el cierre del robot
+        except ur.ErrorUR as e:         # red caida, robot que cierra o no envia estados, mensajes que no se entienden
             print("Conexion perdida ({}). Reintentando en {} s...".format(e, ur.REINTENTO))
             rep.conexion_perdida()
             time.sleep(ur.REINTENTO)
