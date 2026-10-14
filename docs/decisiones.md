@@ -2,7 +2,7 @@
 
 Numeración fija: D1, D2… (nunca se renumera). Cada una lleva contexto, opciones, la elegida y por qué, y la marca **«distinto»** si se aparta de lo que pide el enunciado o de lo que haría la clase: esas son la materia prima de la memoria.
 
-D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14. D6–D9 son de esa misma sesión (fase 1: código escrito por la IA, pendiente de revisión de Josu). D10–D11 son de la revisión de robustez (capa 1, `red.py`).
+D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14. D6–D9 son de esa misma sesión (fase 1: código escrito por la IA, pendiente de revisión de Josu). D10–D11 son de la revisión de robustez de la capa 1 (`red.py`) y D12–D13 de la capa 2 (`ur.py`).
 
 ## D1 – Un solo módulo de protocolo, reutilizado por todos los scripts
 
@@ -76,13 +76,17 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Distinto:** no.
 - **Commit:** `800dd7d`
 
-## D10 – Una sola jerarquía de excepciones de red: `ErrorRed` y `ErrorRedTimeout`
+## D10 – Una clase de excepción por capa: `ErrorRed` (red.py) y `ErrorUR` (ur.py)
 
-- **Contexto:** los errores de socket salían crudos y de seis tipos distintos (F9), y las capas de arriba capturaban `OSError`, `ConnectionError` o `socket.timeout`. El objetivo es que los errores se resuelvan en la capa más baja y que las de arriba solo conozcan las excepciones de la inmediatamente inferior.
-- **Opciones:** (a) dejar `OSError` y mejorar solo los mensajes; (b) `ErrorRed(OSError)`, que no obligaría a cambiar a los llamadores; (c) `ErrorRed(Exception)` independiente, con `ErrorRedTimeout(ErrorRed)` para «no llegó nada en `timeout_lectura` s».
-- **Elegida:** (c), en `red.py`. **Porque** con (b) cualquier `OSError` ajeno (p. ej. al guardar un fichero) seguiría pareciendo «un fallo de conexión», que es justo el equívoco que `tareas.py` ya tenía que evitar con un comentario. `ErrorRedTimeout` existe porque la capa de arriba necesita distinguir «el robot calla, sigue conectado» (la conexión sigue abierta) de «se perdió la conexión» (se cierra). Los módulos de arriba la usan como `ur.ErrorRed` (`ur.py` la reexporta: es la misma clase, no una copia). Toda conexión perdida cierra el socket, de modo que `abierta` es fiable.
+- **Contexto:** los errores de socket salían crudos y de seis tipos distintos (F9), y las capas de arriba capturaban a la vez `OSError`, `ConnectionError`, `socket.timeout`, `ValueError` y `struct.error`; el mismo `ValueError` significaba «buffer desalineado» y «argumento mal puesto». El objetivo es que los errores se resuelvan en la capa más baja y que cada capa solo conozca las excepciones de la inmediatamente inferior.
+- **Opciones:** (a) dejar `OSError` y mejorar solo los mensajes; (b) clases que heredan de `OSError`, que no obligarían a cambiar a los llamadores; (c) una clase independiente por capa, sin heredar de `OSError`.
+- **Elegida:** (c). La jerarquía completa es esta, y no hay más clases:
+  - `red.py`: `ErrorRed(Exception)` para cualquier fallo de la conexión y `ErrorRedTimeout(ErrorRed)` para «no llegó nada en `timeout_lectura` s» (la conexión sigue abierta). Solo la conoce `ur.py`.
+  - `ur.py`: `ErrorUR(Exception)`, que envuelve a `ErrorRed` y a los fallos de formato (`struct.error`, `ValueError` de decodificación, `q` no válido, falta de estados) con `raise ... from e`. Es lo **único** que sale de `ur.py`: `secuencia.py` y `tareas.py` capturan solo `ErrorUR`, y ni `ErrorRed` ni `struct.error` aparecen fuera de `red.py` y `ur.py`.
+  - `ValueError`/`TypeError` quedan para argumentos mal puestos (IP, puerto, timeouts, velocidad...): son errores de configuración o de programación, y los valida `main.py` antes de crear nada (capa 4).
+  **Porque** con (b) cualquier `OSError` ajeno (p. ej. al guardar un fichero) seguiría pareciendo «un fallo de conexión». Los mensajes de cada capa añaden una frase corta y encadenan la causa, sin repetirse en cascada. Toda conexión perdida cierra el socket, de modo que `abierta` es fiable.
 - **Distinto:** no (el enunciado no dice nada).
-- **Commit:** `e639b91`
+- **Commit:** `e639b91` (`ErrorRed`), `0cac920` (`ErrorUR`)
 
 ## D11 – `ConexionTCP` valida sus argumentos y solo acepta IPs, no nombres
 
@@ -91,3 +95,19 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Elegida:** (b) sin (c): `ip` es una IP literal (`ipaddress.ip_address`), `puerto` un entero entre 1 y 65535 y los timeouts números con `0 < t <= 3600` s; si no, `ValueError` en español al crear el objeto. **Porque** hay una sola comprobación y los robots del laboratorio se dan por IP. Coste: `--ip localhost` ya no vale, hay que escribir `127.0.0.1`.
 - **Distinto:** no.
 - **Commit:** `e639b91`
+
+## D12 – Un solo reloj para «datos actuales»: `estado_fresco()` y `PLAZO_ESTADO`
+
+- **Contexto:** un robot mudo o que gotea mantenía la conexión abierta y `ultimo_q()` seguía dando un `q` viejo; `movej` se enviaba sin saber nada del robot (F11, F12).
+- **Opciones:** (a) un plazo para la lectura y otro para el movimiento; (b) una sola función `ClienteUR.estado_fresco()` («llegó un estado válido hace menos de `PLAZO_ESTADO` s», con `time.monotonic()`) que usan `ultimo_q()` y `movej`.
+- **Elegida:** (b), con `PLAZO_ESTADO = 2,0 s` (igual que `timeout_lectura`; un UR manda 125 estados/s por la interfaz primaria). `movej` lanza `ErrorUR` y no envía nada si no hay estado fresco; `stopj` **nunca** lo exige (frenar siempre se intenta) y con un valor inválido frena con `ACELERACION_MAX`. En los tests se reduce la constante en lugar de esperar. **Porque** dos relojes podrían discrepar y la regla es «ante la duda, no mover y avisar». Un `ErrorUR` (también por falta de estados) hace que el cliente se cierre y se reconecte.
+- **Distinto:** sí, respecto a `claude_2` (que enviaba `movej` sin comprobarlo): es más estricto.
+- **Commit:** `0cac920`
+
+## D13 – Formato inesperado del robot: `ErrorUR` una vez por conexión, no adivinar
+
+- **Contexto:** si el subpaquete de articulaciones no mide 251 B, antes se escribía un aviso por mensaje y se decodificaba igualmente con los desplazamientos de 251 B (F13). Los 251 B y el offset 252 no están verificados con un robot real.
+- **Opciones:** (a) tolerar tamaños mayores y avisar; (b) lanzar `ErrorUR` con el tamaño recibido, el esperado y la constante que hay que tocar (`TAM_SUB_JOINTS`).
+- **Elegida:** (b). **Porque** un `q` decodificado con desplazamientos equivocados es finito y creíble, y la regla es no mover con datos dudosos: sin estados válidos no hay `movej` (D12). El motivo se escribe una sola vez (no en cada reintento de `LectorUR`). Igual de estrictos son los límites de lectura de `q` (±(2π + 0,2) rad, con margen por si el robot está en el tope de una articulación) frente a los de envío (±2π). El nivel (`reportLevel`) de los mensajes de error **no se mira**: cualquier error o excepción del robot detiene la secuencia (limitación documentada en [arquitectura](arquitectura.md)).
+- **Distinto:** no.
+- **Commit:** `0cac920`

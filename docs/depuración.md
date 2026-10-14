@@ -2,7 +2,43 @@
 
 El profesor valora sobre todo saber depurar: cada fallo real queda como caso. Numeración fija F1, F2… con el más reciente arriba.
 
-Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F6 es de la fase 1 de `src/`; F7–F10 son de la revisión de robustez de la capa 1 (`red.py`). Cada uno dice qué se ejecutó y qué solo se leyó.
+Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F6 es de la fase 1 de `src/`; F7–F10 son de la revisión de robustez de la capa 1 (`red.py`) y F11–F14 de la capa 2 (`ur.py`). Cada uno dice qué se ejecutó y qué solo se leyó.
+
+## F14 – `parar()` tardaba hasta 2 s, `puerto=0` se cambiaba por el 30001 y `stopj` aceptaba cualquier cosa (2026-10-14, `src/ur.py`)
+
+- **Síntoma:** (a) con el robot mudo, el hilo `LectorUR` seguía vivo y con el socket abierto 1,5 s después de `parar()`; (b) `UrPrimaria(ip, 0)` conectaba al puerto 30001 sin avisar; (c) `stopj(float("nan"))`, `stopj(-5)` y `stopj(1000)` se enviaban tal cual, y con un texto en `aceleracion` se colaba una segunda orden URScript (`stopj(1)\npowerdown()`); (d) `es_punto_valido(None)` y `movej(velocidad="0.1")` lanzaban `TypeError`.
+- **Aislamiento:** ✅ el auditor reprodujo los cuatro (`parar()` → hilo vivo 1,51 s; `puerto 0 → 30001`; las órdenes salían por el socket). Las pruebas nuevas los repiten.
+- **Causa:** (a) `parar()` solo ponía un `Event`, que el hilo mira cuando le llega un estado; (b) `puerto or self.PUERTO` trata `0` y `""` como «no hay puerto»; (c) nadie validaba lo que se escribe en la orden; (d) las comparaciones con tipos raros lanzan `TypeError`.
+- **Arreglo:** `parar()` marca el `Event` **y cierra el cliente** (seguro desde otro hilo por F8); `detener(timeout)` añade el `join`; el hilo mira `_parar` justo después de conectar. `self.PUERTO if puerto is None else puerto`. `enviar_script` rechaza `\n` y `\r`; `stopj` con un valor que no sea un número en `(0, ACELERACION_MAX]` frena con `ACELERACION_MAX` (un valor mal puesto nunca impide frenar). `es_punto_valido` devuelve `False` con tipos raros y `movej` comprueba el tipo. Pruebas: `test_parar_cierra_el_socket_y_el_hilo_termina_enseguida`, `test_puerto_cero_no_se_cambia_en_silencio_por_el_de_defecto`, `test_stopj_sin_estado_frena_y_un_valor_malo_usa_el_maximo`, `test_enviar_script_rechaza_saltos_de_linea`, `test_movej_con_tipos_raros_es_valueerror`, `test_es_punto_valido_con_tipos_raros_es_false_sin_excepcion`.
+- **Commit:** `0cac920`
+- **Para la defensa:** una variable de «parar» solo sirve si el hilo la mira; a un hilo bloqueado en un `recv` hay que despertarlo cerrando el socket.
+
+## F13 – Un mensaje cortado, un `q` con `nan` o un texto raro del robot rompían el programa (2026-10-14, `src/ur.py`)
+
+- **Síntoma:** `struct.error: unpack requires a buffer of 8 bytes` crudo al decodificar un subpaquete de articulaciones vacío o de 100 B, un modo de 5 B o un error de 15–18 B; con `nan`, `inf`, `1e300` o grados en lugar de radianes `ultimo_q()` entregaba `[nan, ...]`, que va al simulador y a la secuencia; un texto del robot con bytes no UTF-8 daba `UnicodeEncodeError` al imprimirlo con la salida redirigida y, como es un `ValueError`, `ensenar_reproducir` lo tomaba por «conexión perdida» y reconectaba en bucle; un subpaquete de 256 B se decodificaba con los desplazamientos de 251 B y escribía un aviso por mensaje (hasta 125 líneas/s).
+- **Aislamiento:** ✅ el auditor lo reprodujo caso a caso con bytes construidos a mano; las pruebas nuevas lo repiten.
+- **Causa:** `ur.py` confiaba en que los bytes del robot tienen el tamaño esperado y dejaba salir `struct.error` y `ValueError` de decodificación, que las capas de arriba tenían que conocer (y que se confundían con los `ValueError` de argumentos).
+- **Arreglo:** `leer_estado` y `leer_error` convierten `struct.error` y `ValueError` en `ErrorUR` (un solo `try` en cada una); `ClienteUR._paquetes` hace lo mismo con una longitud imposible; `_q_valido` rechaza `q` no finito o fuera de ±(2π + 0,2) rad; un subpaquete de articulaciones que no mide 251 B lanza `ErrorUR` diciendo el tamaño recibido y el esperado (D13); `_texto_seguro` deja solo ASCII imprimible y 300 caracteres. Pruebas: `PruebasDecodificarRobusto` (7).
+- **Commit:** `0cac920`
+- **Para la defensa:** los bytes que vienen de fuera no se creen: se comprueba su tamaño y su rango antes de usarlos, y un fallo de formato es un error del robot, no del programa.
+
+## F12 – `movej` se enviaba sin saber si el robot seguía ahí (2026-10-14, `src/ur.py`)
+
+- **Síntoma:** contra un servidor mudo, `movej` se enviaba sin haber recibido ni un estado y sin excepción; lo mismo si el robot llevaba segundos sin enviar o ya había cerrado (el primer `enviar` tras un FIN no falla, ver F9).
+- **Aislamiento:** ✅ reproducido por el auditor con un servidor mudo: el servidor recibió `movej([...])`. Prueba nueva: `test_movej_se_niega_sin_estado_reciente_y_no_envia_nada`.
+- **Causa:** `movej` solo validaba ángulos y límites; nada decía si había un estado reciente.
+- **Arreglo:** `movej` lanza `ErrorUR` y no envía nada si `estado_fresco()` es falso (D12). `stopj` no lo exige: frenar siempre se intenta. `Reproductor._enviar_punto` trata ese `ErrorUR` como cualquier fallo de la secuencia (`stopj` y parada). Pruebas: `test_movej_se_niega_cuando_el_estado_caduca`.
+- **Commit:** `0cac920`
+- **Para la defensa:** la regla de seguridad es «ante la duda, no mover y avisar»: un envío sin error no prueba nada, hace falta un estado reciente.
+
+## F11 – `ultimo_q()` daba un `q` viejo como actual y un error en el hilo lo mataba en silencio (2026-10-14, `src/ur.py`)
+
+- **Síntoma:** (a) un robot que, tras un estado válido, solo manda mensajes de versión (tipo 20), o que gotea un byte por segundo, mantenía la conexión «viva» y `ultimo_q()` devolvía el mismo `q` 6 s o 8 s después; (b) un `IndexError` dentro del hilo `LectorUR` lo mataba (solo un traceback por `stderr`) y `ultimo_q()` seguía dando el último `q` para siempre.
+- **Aislamiento:** ✅ el auditor lo reprodujo con servidores falsos y con un cliente que falla a propósito. Las pruebas nuevas usan `PLAZO_ESTADO` reducido (0,3 s) en vez de esperar 2 s.
+- **Causa:** el timeout de red es «no llega **ningún byte**», no «no llega **un estado**»; `LectorUR` no guardaba cuándo llegó el `q` y solo capturaba `ErrorRed`/`ValueError`/`struct.error`.
+- **Arreglo:** una sola noción de «estado fresco», `ClienteUR.estado_fresco()` con `PLAZO_ESTADO` (2 s) y `time.monotonic()`; `ultimo_q()` devuelve `None` si no es fresco; `_paquetes()` lanza `ErrorUR` si pasa el plazo sin estados aunque lleguen otros bytes. `LectorUR.run` tiene un único `except Exception` de última defensa que guarda el motivo en `ultimo_error` (con su traceback, una vez), deja sin `q` y sigue reintentando, y un `finally` que borra el `q` al salir; el motivo de una desconexión se escribe solo cuando cambia. Pruebas: `test_solo_mensajes_que_no_son_estado_caducan_con_errorur`, `test_un_servidor_que_gotea_bytes_caduca_con_errorur`, `test_el_lector_deja_de_dar_un_q_viejo`, `test_estado_fresco_es_la_unica_definicion`, `test_un_bug_en_el_hilo_se_registra_y_el_hilo_sigue_vivo`, `test_el_motivo_de_la_desconexion_se_escribe_una_sola_vez`, `test_ultimo_error_se_borra_cuando_vuelven_los_estados`.
+- **Commit:** `0cac920`
+- **Para la defensa:** «la conexión está abierta» no quiere decir «los datos son actuales»; se guarda cuándo llegó el último estado y se compara con un plazo.
 
 ## F10 – `timeout_lectura=None` o `0` en `ConexionTCP`: `recibir()` se cuelga para siempre o falla con un error raro (2026-10-14, `src/red.py`)
 
