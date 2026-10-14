@@ -4,16 +4,18 @@ Leyenda: ✅ ejecutado y verificado · ⚠️ ejecutado con salvedad · ❌ no p
 
 Todos los comandos, desde la raíz del repo, en PowerShell 5.1 con Python 3.7.5. `-B` evita crear `__pycache__`.
 
+**Cambio de ruta (2026-10-14):** `practicas\` pasó a `2_practicas\` después de ejecutar T1 a T4 con la ruta vieja. Los comandos de abajo llevan ya la ruta nueva; tras el cambio solo se repitió T1 (`python -B -m unittest discover -s 2_practicas\Practica1_visualizador_UR3e\pruebas`: 84 pruebas OK en 12,7 s). T3, T4 y el resto no se repitieron con la ruta nueva (solo cambia el nombre de la carpeta; ningún script la lleva escrita en el código).
+
 ## Versión final `src/` (fase 1, 2026-10-14)
 
 **Aviso general:** las tramas de las pruebas las construyen `pruebas/ayudas.py` y `pruebas/robot_falso.py` a partir del formato descrito en [docs/ur-referencia.md](../../../docs/ur-referencia.md) y en `claude_2`. Si un robot real mandara otra cosa, estas pruebas no lo detectarían. Por eso las que dependen de ellas llevan ⚠️ y no ✅.
 
 | Id | Qué se prueba | Comando | Resultado | Estado | Fecha |
 |---|---|---|---|---|---|
-| T1 | Pruebas automáticas: `red` (6), `ur` (27), `simulador` (7), `secuencia` (22), `tareas` (13) e integración con el robot falso (9) | `python -B -m unittest discover -s practicas\Practica1_visualizador_UR3e\pruebas -v` | 84 pruebas OK en ≈ 12,6 s. Tres ejecuciones seguidas, código de salida 0 (se buscaba inestabilidad: ver F6 en [depuración](depuración.md)) | ⚠️ | 2026-10-14 |
+| T1 | Pruebas automáticas: `red` (6), `ur` (27), `simulador` (7), `secuencia` (22), `tareas` (13) e integración con el robot falso (9) | `python -B -m unittest discover -s 2_practicas\Practica1_visualizador_UR3e\pruebas -v` | 84 pruebas OK en ≈ 12,6 s. Tres ejecuciones seguidas, código de salida 0 (se buscaba inestabilidad: ver F6 en [depuración](depuración.md)) | ⚠️ | 2026-10-14 |
 | T2 | Que la prueba `test_reconectar_vacia_el_buffer` detecta de verdad el fallo que protege (prueba de mutación: quitar `self._buffer.clear()` de `ClienteUR.conectar`) | script temporal, ejecutado una vez; **no está en el repo** | `MUTANTE DETECTADO`: `ValueError: subpaquete 249 se sale del mensaje` | ✅ | 2026-10-14 |
-| T3 | `Simulador` con la librería **real** `UR3e_rg2`: ids de PyBullet, articulaciones, posición de las bases | `python -B practicas\Practica1_visualizador_UR3e\pruebas\humo_pybullet.py` y la misma con `desplazado` | OK las dos veces: robot1 → id 0, robot2 → id 2; las articulaciones leídas con `pybullet.getJointState` coinciden con las enviadas (p. ej. `[0.3, -1.0, 0.5, -1.2, 0.4, 0.1]` rad); base x = 0,00 m / 0,50 m (primer robot) y 1,00 m. Abre la ventana ≈ 2 s | ✅ | 2026-10-14 |
-| T4 | `main.py` entero (`primaria`, `tiempo-real`, `varios`, `ensenar`) lanzado como subproceso con la ventana real de PyBullet contra robots falsos en puertos libres | `python -u practicas\Practica1_visualizador_UR3e\pruebas\humo_extremo_a_extremo.py` | TODO OK (15 comprobaciones): imprime `q (grados): [0.0, -90.0, 0.0, -90.0, 0.0, 0.0]` en primaria y tiempo real; los 2 robots de `varios` imprimen su `q`; en `ensenar`: `g`, `l`, `e` funcionan, el robot falso recibe 1 `movej` con `a=0.5, v=0.3` y llega a q[0] = 0,200 rad; `ensenar --v 0.5` sale con código 2. Abre la ventana ≈ 5 s cuatro veces | ⚠️ | 2026-10-14 |
+| T3 | `Simulador` con la librería **real** `UR3e_rg2`: ids de PyBullet, articulaciones, posición de las bases | `python -B 2_practicas\Practica1_visualizador_UR3e\pruebas\humo_pybullet.py` y la misma con `desplazado` | OK las dos veces: robot1 → id 0, robot2 → id 2; las articulaciones leídas con `pybullet.getJointState` coinciden con las enviadas (p. ej. `[0.3, -1.0, 0.5, -1.2, 0.4, 0.1]` rad); base x = 0,00 m / 0,50 m (primer robot) y 1,00 m. Abre la ventana ≈ 2 s | ✅ | 2026-10-14 |
+| T4 | `main.py` entero (`primaria`, `tiempo-real`, `varios`, `ensenar`) lanzado como subproceso con la ventana real de PyBullet contra robots falsos en puertos libres | `python -u 2_practicas\Practica1_visualizador_UR3e\pruebas\humo_extremo_a_extremo.py` | TODO OK (15 comprobaciones): imprime `q (grados): [0.0, -90.0, 0.0, -90.0, 0.0, 0.0]` en primaria y tiempo real; los 2 robots de `varios` imprimen su `q`; en `ensenar`: `g`, `l`, `e` funcionan, el robot falso recibe 1 `movej` con `a=0.5, v=0.3` y llega a q[0] = 0,200 rad; `ensenar --v 0.5` sale con código 2. Abre la ventana ≈ 5 s cuatro veces | ⚠️ | 2026-10-14 |
 
 Qué cubre T1 en lo que más importa (cada punto con su prueba en `pruebas/`):
 
@@ -25,8 +27,8 @@ Qué cubre T1 en lo que más importa (cada punto con su prueba en `pruebas/`):
 Para lanzar el robot falso a mano y probar `main.py` sin URSim (**no usar los puertos 30001–30013 con URSim abierto**):
 
 ```powershell
-python -u practicas\Practica1_visualizador_UR3e\pruebas\robot_falso.py 31001
-python -u practicas\Practica1_visualizador_UR3e\src\main.py primaria --puerto 31001
+python -u 2_practicas\Practica1_visualizador_UR3e\pruebas\robot_falso.py 31001
+python -u 2_practicas\Practica1_visualizador_UR3e\src\main.py primaria --puerto 31001
 ```
 
 ## Versiones de partida desde su nueva carpeta (2026-10-14)
@@ -36,13 +38,13 @@ Comprobación posterior a la migración: las versiones archivadas se siguen ejec
 Preparación común (el simulador se deja en segundo plano y se para al terminar):
 
 ```powershell
-python -B -u practicas\Practica1_visualizador_UR3e\versiones\claude_1\simulador_ur.py 31001
+python -B -u 2_practicas\Practica1_visualizador_UR3e\versiones\claude_1\simulador_ur.py 31001
 ```
 
 | Id | Qué se prueba | Comando | Resultado | Estado | Fecha |
 |---|---|---|---|---|---|
-| V1 | `claude_1`: `ejercicio1_leer_un_robot.py` importa `ur_primary` y lee el robot falso | `python -B -u practicas\Practica1_visualizador_UR3e\versiones\claude_1\ejercicio1_leer_un_robot.py --robot 127.0.0.1:31001 --hz 2` (4 s) | «sin datos todavia», «conectado a 127.0.0.1:31001» y después, 2 veces por segundo: joints (rad) `[0.000, -1.570, 0.000, -1.570, 0.000, 0.000]`, TCP en ceros (el robot falso lo emite así) y `modo: running`. Sin errores | ✅ | 2026-10-14 |
-| V2 | `claude_2`: `primaria.conectar` + `mensajes` + `leer_estado` | `python -B -u practicas\Practica1_visualizador_UR3e\pruebas\leer_claude2_robot_falso.py` (script en [pruebas/](../pruebas/leer_claude2_robot_falso.py); lee 3 estados) | 1 mensaje tipo 20 ignorado y 3 estados con `q` (rad) = `[0.0, -1.57, 0.0, -1.57, 0.0, 0.0]` y `modo` = 7 | ✅ | 2026-10-14 |
+| V1 | `claude_1`: `ejercicio1_leer_un_robot.py` importa `ur_primary` y lee el robot falso | `python -B -u 2_practicas\Practica1_visualizador_UR3e\versiones\claude_1\ejercicio1_leer_un_robot.py --robot 127.0.0.1:31001 --hz 2` (4 s) | «sin datos todavia», «conectado a 127.0.0.1:31001» y después, 2 veces por segundo: joints (rad) `[0.000, -1.570, 0.000, -1.570, 0.000, 0.000]`, TCP en ceros (el robot falso lo emite así) y `modo: running`. Sin errores | ✅ | 2026-10-14 |
+| V2 | `claude_2`: `primaria.conectar` + `mensajes` + `leer_estado` | `python -B -u 2_practicas\Practica1_visualizador_UR3e\pruebas\leer_claude2_robot_falso.py` (script en [pruebas/](../pruebas/leer_claude2_robot_falso.py); lee 3 estados) | 1 mensaje tipo 20 ignorado y 3 estados con `q` (rad) = `[0.0, -1.57, 0.0, -1.57, 0.0, 0.0]` y `modo` = 7 | ✅ | 2026-10-14 |
 | V3 | `a_mano`: `main.py` | no ejecutada | Falla por el caso F5 de [depuración](depuración.md), verificado por la Pi el 2026-10-13 (no imprime nada en 6 s) | ❌ | 2026-10-14 |
 
 Lo que **no** demuestran V1 y V2: el robot falso no es URSim ni un robot real, así que no validan los 251 B del subpaquete 1, el TCP ni los mensajes de error.

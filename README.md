@@ -32,11 +32,11 @@ Entrega y fecha: no constan.
 Entorno (Python 3.7.5, URSim, puertos): [docs/entorno.md](../../docs/entorno.md). Desde la raíz del repo, en PowerShell 5.1:
 
 ```powershell
-python -u practicas\Practica1_visualizador_UR3e\src\main.py primaria                   # URSim 1 por NAT: 127.0.0.1:30001
-python -u practicas\Practica1_visualizador_UR3e\src\main.py primaria --ip 10.172.21.203  # un robot del laboratorio
-python -u practicas\Practica1_visualizador_UR3e\src\main.py tiempo-real                # 127.0.0.1:30003
-python -u practicas\Practica1_visualizador_UR3e\src\main.py varios                     # robots de src\robots.json
-python -u practicas\Practica1_visualizador_UR3e\src\main.py ensenar --v 0.1 --a 0.2    # ¡ENVIA movej al robot!
+python -u 2_practicas\Practica1_visualizador_UR3e\src\main.py primaria                   # URSim 1 por NAT: 127.0.0.1:30001
+python -u 2_practicas\Practica1_visualizador_UR3e\src\main.py primaria --ip 10.172.21.203  # un robot del laboratorio
+python -u 2_practicas\Practica1_visualizador_UR3e\src\main.py tiempo-real                # 127.0.0.1:30003
+python -u 2_practicas\Practica1_visualizador_UR3e\src\main.py varios                     # robots de src\robots.json
+python -u 2_practicas\Practica1_visualizador_UR3e\src\main.py ensenar --v 0.1 --a 0.2    # ¡ENVIA movej al robot!
 ```
 
 Parar con Ctrl+C. `ensenar` pide comandos en la consola: `g` guardar punto, `v` previsualizar, `e` ejecutar, `c` cancelar, `r` reanudar, `s`/`l [fichero]` guardar/cargar, `b` borrar, `q` salir. **Antes de `e`:** el robot encendido con frenos liberados (`robotMode = 7`) y, en URSim/PolyScope 5, *Ajustes → Sistema → Control remoto* en **Remoto**; velocidades bajas y zona despejada en un robot real. `movej` se niega a enviar más de 0,3 rad/s o 0,5 rad/s².
@@ -44,19 +44,19 @@ Parar con Ctrl+C. `ensenar` pide comandos en la consola: `g` guardar punto, `v` 
 **Pruebas** (no necesitan robot ni URSim):
 
 ```powershell
-python -B -m unittest discover -s practicas\Practica1_visualizador_UR3e\pruebas -v          # 84 pruebas, ≈ 13 s
-python -u practicas\Practica1_visualizador_UR3e\pruebas\humo_extremo_a_extremo.py          # main.py entero con ventana real
+python -B -m unittest discover -s 2_practicas\Practica1_visualizador_UR3e\pruebas -v          # 84 pruebas, ≈ 13 s
+python -u 2_practicas\Practica1_visualizador_UR3e\pruebas\humo_extremo_a_extremo.py          # main.py entero con ventana real
 ```
 
 Para probar las versiones archivadas sin robot, con el robot falso de Claude 1 (solo lectura; **no lanzarlo con URSim abierto**: comparten puertos):
 
 ```powershell
 # terminal 1: robot falso en el puerto 31001
-python -B -u practicas\Practica1_visualizador_UR3e\versiones\claude_1\simulador_ur.py 31001
+python -B -u 2_practicas\Practica1_visualizador_UR3e\versiones\claude_1\simulador_ur.py 31001
 
 # terminal 2: Claude 1 (parar con Ctrl+C) o Claude 2 (se para solo a los 3 estados)
-python -B -u practicas\Practica1_visualizador_UR3e\versiones\claude_1\ejercicio1_leer_un_robot.py --robot 127.0.0.1:31001
-python -B -u practicas\Practica1_visualizador_UR3e\pruebas\leer_claude2_robot_falso.py
+python -B -u 2_practicas\Practica1_visualizador_UR3e\versiones\claude_1\ejercicio1_leer_un_robot.py --robot 127.0.0.1:31001
+python -B -u 2_practicas\Practica1_visualizador_UR3e\pruebas\leer_claude2_robot_falso.py
 ```
 
 ## 4. Versiones de partida

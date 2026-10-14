@@ -2,7 +2,7 @@
 Pruebas de src/tareas.py: cargar_robots y los comandos de la consola de enseñar y reproducir,
 con un simulador falso (no abre ventana) y un robot que solo graba lo que se le envia.
 
-    python -B -m unittest discover -s practicas\\Practica1_visualizador_UR3e\\pruebas -v
+    python -B -m unittest discover -s 2_practicas\\Practica1_visualizador_UR3e\\pruebas -v
 """
 import contextlib
 import io

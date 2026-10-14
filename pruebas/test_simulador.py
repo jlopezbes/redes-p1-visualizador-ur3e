@@ -2,7 +2,7 @@
 Pruebas de src/simulador.py con un visualizador falso (no abre ninguna ventana).
 La prueba con la libreria real esta en pruebas/humo_pybullet.py.
 
-    python -B -m unittest discover -s practicas\\Practica1_visualizador_UR3e\\pruebas -v
+    python -B -m unittest discover -s 2_practicas\\Practica1_visualizador_UR3e\\pruebas -v
 """
 import unittest
 

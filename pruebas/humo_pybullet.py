@@ -2,8 +2,8 @@
 Prueba de humo de src/simulador.py con la libreria REAL UR3e_rg2. Abre la ventana de PyBullet unos 2 s y la cierra.
 No toca ningun robot ni abre ningun socket.
 
-    python -B practicas\\Practica1_visualizador_UR3e\\pruebas\\humo_pybullet.py              (primer robot en el origen)
-    python -B practicas\\Practica1_visualizador_UR3e\\pruebas\\humo_pybullet.py desplazado    (primer robot en x = 0,5 m)
+    python -B 2_practicas\\Practica1_visualizador_UR3e\\pruebas\\humo_pybullet.py              (primer robot en el origen)
+    python -B 2_practicas\\Practica1_visualizador_UR3e\\pruebas\\humo_pybullet.py desplazado    (primer robot en x = 0,5 m)
 
 Comprueba con pybullet.getJointState / getBasePositionAndOrientation que lo que dice Simulador es lo que ocurre.
 """

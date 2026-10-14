@@ -3,9 +3,9 @@ Prueba V2 de docs/pruebas.md: lee 3 estados con las funciones de versiones/claud
 Solo lectura. No usa primaria.main() porque abre PyBullet.
 
 Antes hay que tener el robot falso en marcha (puerto 31001, no el de URSim):
-    python -B -u practicas\\Practica1_visualizador_UR3e\\versiones\\claude_1\\simulador_ur.py 31001
+    python -B -u 2_practicas\\Practica1_visualizador_UR3e\\versiones\\claude_1\\simulador_ur.py 31001
 Despues, desde la raiz del repo:
-    python -B -u practicas\\Practica1_visualizador_UR3e\\pruebas\\leer_claude2_robot_falso.py [puerto]
+    python -B -u 2_practicas\\Practica1_visualizador_UR3e\\pruebas\\leer_claude2_robot_falso.py [puerto]
 """
 import os
 import sys

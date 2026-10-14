@@ -2,7 +2,7 @@
 Pruebas de integracion: ur.py y secuencia.py contra pruebas/robot_falso.py por sockets reales (127.0.0.1, puerto libre).
 Envian movej al ROBOT FALSO, nunca a URSim ni a un robot. Tardan unos segundos porque el robot falso mueve de verdad.
 
-    python -B -m unittest discover -s practicas\\Practica1_visualizador_UR3e\\pruebas -v
+    python -B -m unittest discover -s 2_practicas\\Practica1_visualizador_UR3e\\pruebas -v
 """
 import contextlib
 import io

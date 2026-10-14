@@ -2,7 +2,7 @@
 Pruebas de src/secuencia.py: la maquina de estados del Reproductor con un robot que solo graba lo que se le envia
 y mensajes del robot construidos con struct (pruebas/ayudas.py). Reloj controlado: no espera segundos reales.
 
-    python -B -m unittest discover -s practicas\\Practica1_visualizador_UR3e\\pruebas -v
+    python -B -m unittest discover -s 2_practicas\\Practica1_visualizador_UR3e\\pruebas -v
 """
 import contextlib
 import io

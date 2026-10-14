@@ -3,7 +3,7 @@ Prueba de humo de extremo a extremo: lanza src\\main.py de verdad (con la ventan
 robots falsos de pruebas/robot_falso.py y comprueba lo que imprime. Abre una ventana de PyBullet unos 4 s por orden.
 Envia movej solo al ROBOT FALSO (puertos 31xxx), nunca a URSim ni a un robot.
 
-    python -u practicas\\Practica1_visualizador_UR3e\\pruebas\\humo_extremo_a_extremo.py
+    python -u 2_practicas\\Practica1_visualizador_UR3e\\pruebas\\humo_extremo_a_extremo.py
 """
 import os
 import subprocess

@@ -2,7 +2,7 @@
 Pruebas de src/ur.py: decodificacion con bytes, orden movej con una conexion falsa, y UrPrimaria,
 UrTiempoReal y LectorUR contra un servidor local. No necesita robot.
 
-    python -B -m unittest discover -s practicas\\Practica1_visualizador_UR3e\\pruebas -v
+    python -B -m unittest discover -s 2_practicas\\Practica1_visualizador_UR3e\\pruebas -v
 """
 import struct
 import time
