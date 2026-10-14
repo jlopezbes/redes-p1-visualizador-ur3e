@@ -2,7 +2,49 @@
 
 El profesor valora sobre todo saber depurar: cada fallo real queda como caso. Numeración fija F1, F2… con el más reciente arriba.
 
-Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F6 es de la fase 1 de `src/`; F7–F10 son de la revisión de robustez de la capa 1 (`red.py`) y F11–F14 de la capa 2 (`ur.py`). Cada uno dice qué se ejecutó y qué solo se leyó.
+Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F6 es de la fase 1 de `src/`; F7–F10 son de la revisión de robustez de la capa 1 (`red.py`) y F11–F14 de la capa 2 (`ur.py`) y F15–F19 de la capa 3 (`secuencia.py`, `simulador.py`). Cada uno dice qué se ejecutó y qué solo se leyó.
+
+## F19 – La ventana de PyBullet cerrada o un valor absurdo hacían caer el programa con un error de la librería (2026-10-14, `src/simulador.py`)
+
+- **Síntoma:** sin `UR3e_rg2`, `ModuleNotFoundError` antes de abrir nada; con la ventana cerrada, `pybullet.error: Not connected to physics server` desde el hilo principal; `mover` aceptaba `nan`, `inf`, 5 o 7 ángulos y cadenas y se los pasaba a la librería; `mover("nadie")` daba `KeyError`; el simulador no tenía `cerrar()`; una vista previa de 100 puntos bloqueaba el programa 100 s.
+- **Aislamiento:** ✅ el auditor lo reprodujo con un visualizador falso y con PyBullet en modo DIRECT sin ventana. No se ha abierto ninguna ventana al corregirlo, así que el cierre real de la ventana con `cerrar()` **no está verificado**.
+- **Causa:** `Simulador` pasaba todo a la librería sin comprobarlo y no capturaba lo que esta lanza.
+- **Arreglo:** `ErrorSimulador` (D10); toda llamada a la librería va por `_libreria()`, el único `except Exception` del módulo, que lo convierte en `ErrorSimulador ... from e`. `mover` y `agregar_robot` validan en la frontera (`_seis_numeros`: 6 números finitos, `ValueError`) y un nombre desconocido es `ValueError`. `cerrar()` idempotente y `with Simulador() as sim`. `previsualizar` limita su duración total a `MAX_PREVIEW` (20 s). Pruebas: `PruebasSimuladorRobusto` (7).
+- **Commit:** `0cff77d`
+
+## F18 – Un fichero de secuencia malo salía crudo y un `guardar` fallido destruía el anterior (2026-10-14, `src/secuencia.py`)
+
+- **Síntoma:** un JSON anidado 5000 niveles daba `RecursionError` (traceback y fuera del programa); `{}` se aceptaba y luego `g` fallaba con `AttributeError`; `true` pasaba por 1 rad; un fichero vacío o con BOM daba `JSONDecodeError` en inglés; no había tope de tamaño (200 000 puntos en 0,24 s); y un `json.dump` que fallaba a mitad dejaba `[[0.2, ...], ` en lugar del fichero anterior.
+- **Aislamiento:** ✅ reproducido por el auditor con 25 ficheros distintos. Las pruebas nuevas repiten 13 de ellos más los casos de binario, enorme, directorio e inexistente.
+- **Causa:** `cargar` solo comprobaba los ángulos y `guardar` abría el fichero definitivo en modo `"w"` (lo vacía antes de escribir).
+- **Arreglo:** `ErrorSecuencia` (D10). `cargar` lee con `utf-8-sig`, limita el fichero (`MAX_BYTES_FICHERO` = 1 MB) y los puntos (`MAX_PUNTOS` = 1000), exige una lista de listas de 6 números (no `bool`, finitos, en ±2π: función `_punto_valido`) y convierte `OSError`, `JSONDecodeError`, `UnicodeDecodeError` y `RecursionError` en un `ErrorSecuencia` que dice qué fichero y por qué; no toca la secuencia si falla. `guardar` escribe en `ruta.tmp` y `os.replace`; el temporal se borra siempre. `tareas.py` captura `ErrorSecuencia`. Pruebas: `PruebasFicherosSecuencia` (5).
+- **Commit:** `0cff77d`
+
+## F17 – Tras una vista previa larga, `e` fallaba por «estado viejo» con el robot sano (2026-10-14, `src/secuencia.py`)
+
+- **Síntoma:** con 3 puntos guardados y los comandos `v` y `e` en la misma tanda, el primer `movej` se negaba («no hay un estado del robot de hace menos de 2.0 s»), el `Reproductor` enviaba `stopj` y quedaba en parada. Con 1 punto (vista previa de 1 s) funcionaba.
+- **Aislamiento:** ✅ reproducido por el auditor con el robot falso (`e20_previsualizar_movej.py`): 3 puntos = 3 s de vista previa > `PLAZO_ESTADO`. Era una **regresión de mi arreglo F12** (D12): C2 hizo bien en no mover con datos viejos, pero nadie esperaba a tenerlos.
+- **Causa:** `previsualizar` bloquea el hilo principal; mientras tanto no se consumen mensajes y el último estado envejece. `tareas._comando` procesa `v` y `e` con el mismo mensaje.
+- **Arreglo:** `ejecutar()` y `reanudar()` pasan por `_empezar()`: si `robot.estado_fresco()` envía el punto; si no, la fase `ESPERANDO_ESTADO` espera a que llegue un mensaje de estado nuevo (`procesar` envía entonces el primer `movej`) con un tope de `ESPERA_ESTADO` = 3 s, y si vence, falla con un mensaje claro. `PLAZO_ESTADO` no se toca. Además `guardar_punto` y `_alcanzado` exigen estado fresco (criterio 9). Pruebas: `test_ejecutar_con_estado_viejo_espera_a_un_estado_reciente`, `test_la_espera_de_estado_tiene_tope`, `test_guardar_punto_exige_estado_fresco`, `test_con_estado_viejo_no_se_da_un_punto_por_alcanzado` (con `PLAZO_ESTADO` reducido, sin esperas largas).
+- **Commit:** `0cff77d`
+- **Para la defensa:** una comprobación nueva de seguridad puede romper un camino que antes funcionaba; hay que probar las combinaciones (`v` seguido de `e`), no solo cada orden por separado.
+
+## F16 – Se enviaba `movej` con el robot en parada de protección o de emergencia, y `reanudar` reventaba tras borrar la secuencia (2026-10-14, `src/secuencia.py`)
+
+- **Síntoma:** con `protegido`, `emergencia` o modo «power off» el `movej` salía igualmente (la parada de protección se detectaba después, cuando la orden ya se había enviado); la emergencia ni se guardaba. Y `b` o `l` con el `Reproductor` en parada seguido de `r` daba `IndexError` sin capturar (o reanudaba en el punto N de **otra** secuencia).
+- **Aislamiento:** ✅ reproducido por el auditor con un robot de mentira en memoria; pruebas nuevas: `test_no_ejecuta_ni_reanuda_con_proteccion_o_emergencia`, `test_la_emergencia_durante_el_movimiento_frena`, `test_reanudar_tras_borrar_la_secuencia_no_revienta`, `test_ejecutar_con_el_robot_ocupado_no_envia_otro_movej`.
+- **Causa:** `ejecutar` solo miraba que hubiera puntos y un `q`; `procesar` descartaba `emergencia` y `modo`; `_enviar_punto` indexaba la secuencia sin comprobar el índice.
+- **Arreglo:** `_motivo_bloqueo()` (una función; solo bloquean `protegido` y `emergencia`) usada por `ejecutar`, `reanudar` y `_enviar_punto`. El modo (`robotMode`) se guarda en `self.modo` y solo se muestra en un mensaje: no bloquea porque su decodificación no está verificada con un robot real (D14). `_enviar_punto` comprueba `i` y avisa «la secuencia ha cambiado»; `ejecutar` rechaza una segunda orden con el robot en marcha.
+- **Commit:** `0cff77d`
+
+## F15 – Si el `stopj` no podía enviarse, el programa decía que la secuencia estaba «detenida» (2026-10-14, `src/secuencia.py`)
+
+- **Síntoma:** con la conexión caída, `_fallar` se tragaba el `ErrorUR` y escribía «SECUENCIA DETENIDA»; `conexion_perdida` decía «Secuencia detenida en el punto N» sin haber enviado ninguna parada; `cancelar` dejaba subir el `ErrorUR` y la fase se quedaba en «moviendo»; un mensaje del robot cortado hacía subir un `ErrorUR` desde `procesar` con el movimiento en curso y sin `stopj`. En ningún caso se avisaba de que el robot podía seguir moviéndose hasta el último punto.
+- **Aislamiento:** ✅ reproducido por el auditor con un robot cuyo `stopj` lanza `ErrorUR`.
+- **Causa:** el `Reproductor` trataba el fallo del `stopj` como algo que se puede ignorar, y no tenía un único sitio donde frenar.
+- **Arreglo:** un único `_parar_robot()` que devuelve `True/False`; si es `False`, imprime una vez «*** NO SE HA PODIDO ENVIAR LA PARADA (...): el robot puede seguir moviéndose hasta el punto N. PARALO CON EL BOTON DEL PENDANT ***». Lo usan `_fallar`, `cancelar` y `conexion_perdida`; `cancelar` deja SIEMPRE el `Reproductor` en `LIBRE`; `procesar` convierte un `ErrorUR` en un fallo con parada, así que **el `Reproductor` no deja escapar `ErrorUR`**. Pruebas: `test_si_no_sale_el_stopj_se_avisa_en_mayusculas_y_no_se_dice_detenido`, `test_cancelar_sin_conexion_deja_libre_y_avisa`, `test_conexion_perdida_avisa_de_que_el_robot_puede_seguir_moviendose`, `test_mensaje_de_estado_mal_formado_en_movimiento_frena_sin_excepcion`, `test_mensaje_de_error_cortado_sin_movimiento_solo_avisa`.
+- **Commit:** `0cff77d`
+- **Para la defensa:** el peor caso del programa es «el robot se mueve y yo no he podido frenarlo»: tiene que verse, y nunca se afirma una parada que no se ha enviado.
 
 ## F14 – `parar()` tardaba hasta 2 s, `puerto=0` se cambiaba por el 30001 y `stopj` aceptaba cualquier cosa (2026-10-14, `src/ur.py`)
 

@@ -2,7 +2,7 @@
 
 Numeración fija: D1, D2… (nunca se renumera). Cada una lleva contexto, opciones, la elegida y por qué, y la marca **«distinto»** si se aparta de lo que pide el enunciado o de lo que haría la clase: esas son la materia prima de la memoria.
 
-D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14. D6–D9 son de esa misma sesión (fase 1: código escrito por la IA, pendiente de revisión de Josu). D10–D11 son de la revisión de robustez de la capa 1 (`red.py`) y D12–D13 de la capa 2 (`ur.py`).
+D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14. D6–D9 son de esa misma sesión (fase 1: código escrito por la IA, pendiente de revisión de Josu). D10–D11 son de la revisión de robustez de la capa 1 (`red.py`) D12–D13 de la capa 2 (`ur.py`) y D14–D15 de la capa 3 (`secuencia.py`, `simulador.py`).
 
 ## D1 – Un solo módulo de protocolo, reutilizado por todos los scripts
 
@@ -76,17 +76,23 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Distinto:** no.
 - **Commit:** `800dd7d`
 
-## D10 – Una clase de excepción por capa: `ErrorRed` (red.py) y `ErrorUR` (ur.py)
+## D10 – Una clase de excepción por módulo: `ErrorRed`, `ErrorUR`, `ErrorSecuencia` y `ErrorSimulador`
 
-- **Contexto:** los errores de socket salían crudos y de seis tipos distintos (F9), y las capas de arriba capturaban a la vez `OSError`, `ConnectionError`, `socket.timeout`, `ValueError` y `struct.error`; el mismo `ValueError` significaba «buffer desalineado» y «argumento mal puesto». El objetivo es que los errores se resuelvan en la capa más baja y que cada capa solo conozca las excepciones de la inmediatamente inferior.
-- **Opciones:** (a) dejar `OSError` y mejorar solo los mensajes; (b) clases que heredan de `OSError`, que no obligarían a cambiar a los llamadores; (c) una clase independiente por capa, sin heredar de `OSError`.
-- **Elegida:** (c). La jerarquía completa es esta, y no hay más clases:
-  - `red.py`: `ErrorRed(Exception)` para cualquier fallo de la conexión y `ErrorRedTimeout(ErrorRed)` para «no llegó nada en `timeout_lectura` s» (la conexión sigue abierta). Solo la conoce `ur.py`.
-  - `ur.py`: `ErrorUR(Exception)`, que envuelve a `ErrorRed` y a los fallos de formato (`struct.error`, `ValueError` de decodificación, `q` no válido, falta de estados) con `raise ... from e`. Es lo **único** que sale de `ur.py`: `secuencia.py` y `tareas.py` capturan solo `ErrorUR`, y ni `ErrorRed` ni `struct.error` aparecen fuera de `red.py` y `ur.py`.
-  - `ValueError`/`TypeError` quedan para argumentos mal puestos (IP, puerto, timeouts, velocidad...): son errores de configuración o de programación, y los valida `main.py` antes de crear nada (capa 4).
+- **Contexto:** los errores de socket salían crudos y de seis tipos distintos (F9), y las capas de arriba capturaban a la vez `OSError`, `ConnectionError`, `socket.timeout`, `ValueError`, `struct.error` y hasta `RecursionError`; el mismo `ValueError` significaba «buffer desalineado» y «argumento mal puesto». El objetivo es que los errores se resuelvan en la capa más baja y que cada capa solo conozca las excepciones de la inmediatamente inferior.
+- **Opciones:** (a) dejar `OSError` y mejorar solo los mensajes; (b) clases que heredan de `OSError`, que no obligarían a cambiar a los llamadores; (c) una clase independiente por módulo, sin heredar de `OSError`.
+- **Elegida:** (c). La jerarquía completa es esta, y no hay más clases (todas heredan de `Exception` y son ramas distintas del árbol):
+
+  | Módulo | Clase | Qué significa | Quién la captura |
+  |---|---|---|---|
+  | `red.py` | `ErrorRed`, `ErrorRedTimeout(ErrorRed)` | Fallo de la conexión TCP; el segundo, «no llegó nada en `timeout_lectura` s» (la conexión sigue abierta) | solo `ur.py` |
+  | `ur.py` | `ErrorUR` | Envuelve a `ErrorRed` y a los fallos de formato (`struct.error`, `ValueError` de decodificación, `q` no válido, falta de estados) con `raise ... from e` | `Reproductor` (dentro) y `tareas.py` (el que sale del generador de mensajes) |
+  | `secuencia.py` | `ErrorSecuencia` | No se puede leer o guardar el fichero de la secuencia (ilegible, vacío, enorme, con puntos no válidos, disco) | `tareas.py` |
+  | `simulador.py` | `ErrorSimulador` | Falta la librería, se cerró la ventana, PyBullet falló | `tareas.py` / `main.py` (capa 4) |
+
+  `ValueError`/`TypeError` quedan para argumentos mal puestos (IP, puerto, timeouts, velocidad, un `q` con `nan`...): son errores de configuración o de programación, y `main.py` los valida antes de crear nada (capa 4). **Un solo `except Exception` fuera de `main` y del bucle de un hilo:** `Simulador._libreria()`, acotado a la llamada a PyBullet/`UR3eRG2` (código de terceros sin una jerarquía de errores útil: `pybullet.error`, `SystemError`, `ImportError`...), que siempre convierte en `ErrorSimulador ... from e`.
   **Porque** con (b) cualquier `OSError` ajeno (p. ej. al guardar un fichero) seguiría pareciendo «un fallo de conexión». Los mensajes de cada capa añaden una frase corta y encadenan la causa, sin repetirse en cascada. Toda conexión perdida cierra el socket, de modo que `abierta` es fiable.
 - **Distinto:** no (el enunciado no dice nada).
-- **Commit:** `e639b91` (`ErrorRed`), `0cac920` (`ErrorUR`)
+- **Commit:** `e639b91` (`ErrorRed`), `0cac920` (`ErrorUR`), `0cff77d` (`ErrorSecuencia`, `ErrorSimulador`)
 
 ## D11 – `ConexionTCP` valida sus argumentos y solo acepta IPs, no nombres
 
@@ -111,3 +117,19 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Elegida:** (b). **Porque** un `q` decodificado con desplazamientos equivocados es finito y creíble, y la regla es no mover con datos dudosos: sin estados válidos no hay `movej` (D12). El motivo se escribe una sola vez (no en cada reintento de `LectorUR`). Igual de estrictos son los límites de lectura de `q` (±(2π + 0,2) rad, con margen por si el robot está en el tope de una articulación) frente a los de envío (±2π). El nivel (`reportLevel`) de los mensajes de error **no se mira**: cualquier error o excepción del robot detiene la secuencia (limitación documentada en [arquitectura](arquitectura.md)).
 - **Distinto:** no.
 - **Commit:** `0cac920`
+
+## D14 – El `Reproductor` espera un estado reciente, solo la protección y la emergencia bloquean, y si no puede frenar lo grita
+
+- **Contexto:** al exigir `movej` un estado fresco (D12), una vista previa larga hacía fallar el siguiente `e` (F17); el `Reproductor` enviaba `movej` con el robot parado por seguridad (F16) y se tragaba los fallos del `stopj` (F15).
+- **Opciones:** (a) subir `PLAZO_ESTADO` o saltarse la comprobación tras una vista previa; (b) una fase `ESPERANDO_ESTADO` con tope (`ESPERA_ESTADO` = 3 s) que envía el primer `movej` cuando llega un estado reciente; para bloquear: (c) `protegido` y `emergencia`, o (d) también el modo del robot (`robotMode` distinto de 7).
+- **Elegidas:** (b) y (c). **Porque** (a) quitaría la seguridad de D12 justo donde hace falta; y (d) se descarta porque la decodificación de esos campos no está verificada con un robot real y no se debe inutilizar el programa por una suposición: el modo se guarda y se muestra en un mensaje, pero no bloquea. Si no se puede enviar el `stopj` se escribe una vez, en mayúsculas, que el robot puede seguir moviéndose y que hay que pararlo con el botón del pendant; `cancelar` deja siempre el `Reproductor` libre y nunca se escribe «detenido» sin haber enviado la parada. Un `ErrorUR` del `Reproductor` no sale: pasa a fallo con parada.
+- **Distinto:** sí, respecto a `claude_2` (no esperaba ni comprobaba nada).
+- **Commit:** `0cff77d`
+
+## D15 – Ficheros de secuencia con tope y guardado atómico; el simulador valida en su frontera
+
+- **Contexto:** un fichero de secuencia es un dato que viene de fuera (F18) y los valores que llegan al simulador acaban dentro de una librería de terceros que no los comprueba (F19).
+- **Opciones:** (a) validar en `tareas.py`; (b) validar dentro de `Secuencia.cargar` y `Simulador` y escribir con un temporal.
+- **Elegida:** (b). Topes: 1 MB y 1000 puntos por fichero, cada punto una lista de 6 números en ±2π; `guardar` escribe en `ruta.tmp` y `os.replace`. El simulador acepta `q` en ±(2π + 0,2) rad (el mismo `LIMITE_Q_LECTURA` de `ur.py`) y una base en ±100 m/rad, y limita la vista previa a `MAX_PREVIEW` = 20 s. **Porque** así la comprobación está en un solo sitio y las capas de arriba reciben un `ErrorSecuencia`/`ErrorSimulador` con el motivo en español, no un traceback.
+- **Distinto:** no.
+- **Commit:** `0cff77d`

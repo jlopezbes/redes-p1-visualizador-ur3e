@@ -10,8 +10,8 @@ Versión final en `src/` (fase 1: código escrito por la IA a partir de `claude_
 | `src/tareas.py` | `visualizar_primaria`, `visualizar_tiempo_real`, `visualizar_varios`, `ensenar_reproducir`, `cargar_robots` | Las cuatro tareas de la práctica como **funciones** que juntan los controladores. Aquí vive el bucle de dibujo y la consola de enseñar. |
 | `src/ur.py` | clases `ClienteUR`, `UrPrimaria`, `UrTiempoReal`, `LectorUR` y las funciones de decodificación | **Habla con el UR** usando `ConexionTCP`: corta los bytes en mensajes, los decodifica y envía `movej`/`stopj`. Define `ErrorUR`: es lo único que sale de este módulo hacia arriba (D10). |
 | `src/red.py` | clases `ConexionTCP`, `ErrorRed`, `ErrorRedTimeout` | **Red pura**: abrir, cerrar, enviar y recibir por TCP con timeouts. No conoce el protocolo del UR. Valida sus argumentos y **traduce todo fallo de socket a `ErrorRed`** (D10, D11): las capas de arriba no conocen `socket` ni `OSError`. |
-| `src/simulador.py` | clase `Simulador` | Envuelve `UR3eRG2` (PyBullet): robots por nombre, posición de la base, `mover` y `previsualizar`. |
-| `src/secuencia.py` | clases `Secuencia`, `Reproductor` | Enseñar y reproducir: la lista de puntos (JSON) y la máquina de estados que envía un `movej` por punto y vigila errores. |
+| `src/simulador.py` | clases `Simulador`, `ErrorSimulador` | Envuelve `UR3eRG2` (PyBullet): robots por nombre, posición de la base, `mover`, `previsualizar` y `cerrar`. Valida lo que recibe y convierte los fallos de la librería en `ErrorSimulador` (D10, D15). |
+| `src/secuencia.py` | clases `Secuencia`, `Reproductor`, `ErrorSecuencia` | Enseñar y reproducir: la lista de puntos (JSON, validada y guardada de forma atómica) y la máquina de estados que envía un `movej` por punto y vigila errores. No deja escapar `ErrorUR`. |
 | `src/robots.json` | datos | Robots de `visualizar_varios`: nombre, IP, puerto y posición de la base. |
 
 ## Flujo de datos
@@ -50,7 +50,7 @@ Un mensaje de estado: `ConexionTCP.recibir()` → buffer de `ClienteUR` → `ext
 
 ## Errores del robot (contrato de `ur.py`)
 
-Una clase de excepción por capa (D10): `ErrorRed` sale de `red.py` y se queda en `ur.py`; `ErrorUR` sale de `ur.py` y es lo único que conocen `secuencia.py` y `tareas.py`. `ValueError`/`TypeError` solo significan «argumento mal puesto».
+Una clase de excepción por módulo (D10): `ErrorRed` sale de `red.py` y se queda en `ur.py`; `ErrorUR` sale de `ur.py` y es lo único de `ur.py` que conocen `secuencia.py` y `tareas.py`; `ErrorSecuencia` y `ErrorSimulador` salen de sus módulos y las captura `tareas.py`. `ValueError`/`TypeError` solo significan «argumento mal puesto».
 
 | Situación | Qué ocurre |
 |---|---|
@@ -64,6 +64,18 @@ Una clase de excepción por capa (D10): `ErrorRed` sale de `red.py` y se queda e
 **Estado fresco:** `ClienteUR.estado_fresco()` es la única definición (un estado válido recibido hace menos de `PLAZO_ESTADO` s, con `time.monotonic()`). La usan `LectorUR.ultimo_q()` (devuelve `None` si el q es viejo) y `UrPrimaria.movej()`. Un `ErrorUR` (también por falta de estados) hace que `LectorUR` y `ensenar_reproducir` cierren y reconecten; un `ErrorRedTimeout` suelto se trata igual.
 
 **`LectorUR`:** `ultimo_q()` (copia o `None`), `vivo`, `ultimo_error` (texto o `None`), `parar()` (cierra el socket, el hilo sale enseguida) y `detener(timeout)` (`parar()` + `join`). El motivo de una desconexión se escribe una vez, no en cada reintento. Un bug dentro del hilo se anota en `ultimo_error` con su traceback y el hilo sigue reintentando.
+
+## Errores de la secuencia y del simulador (contrato de `secuencia.py` y `simulador.py`)
+
+| Situación | Qué ocurre |
+|---|---|
+| `Secuencia.cargar`: fichero ausente, ilegible, vacío, binario, de más de 1 MB o de más de 1000 puntos, JSON malo o muy anidado, o puntos que no son 6 números finitos en ±2π | `ErrorSecuencia` (qué fichero y por qué); la secuencia no cambia |
+| `Secuencia.guardar` sin poder escribir | `ErrorSecuencia`; el fichero anterior queda intacto (se escribe en `ruta.tmp` y se renombra) |
+| `Reproductor`: `stopj` que no sale | una línea en mayúsculas («NO SE HA PODIDO ENVIAR LA PARADA... PARALO CON EL BOTON DEL PENDANT»); `cancelar` deja el `Reproductor` en `LIBRE` igualmente |
+| `Reproductor`: `protegido` o `emergencia` | no se ejecuta ni se reanuda; en movimiento, `stopj` y `PARADA`. El modo del robot solo se muestra |
+| `Reproductor.ejecutar` con el último estado más viejo que `PLAZO_ESTADO` (p. ej. tras una vista previa) | fase `ESPERANDO_ESTADO`: el primer `movej` sale cuando llega un estado reciente; tope `ESPERA_ESTADO` = 3 s |
+| `Simulador`: falta `UR3e_rg2`, ventana cerrada, `pybullet.error` | `ErrorSimulador` |
+| `Simulador.mover`/`agregar_robot` con `q` o posición no válidos, o un robot que no existe | `ValueError` |
 
 **Para la capa de `main.py` (C4):** `ConexionTCP` lanza `ValueError` si la IP, el puerto o los timeouts no son válidos; por eso `main.py` debe validar `--ip`, `--puerto` y `robots.json` **antes** de abrir la ventana y de crear las conexiones, y mostrar el motivo en español.
 
@@ -92,6 +104,10 @@ Una clase de excepción por capa (D10): `ErrorRed` sale de `red.py` y se queda e
 | `red.py` | `MAX_RECIBIR` | 1 048 576 | bytes | Tope del argumento de `recibir(maximo)`. |
 | `tareas.py` | `HZ_DIBUJO`, `PERIODO_INFO` | 30, 1,0 | Hz, s | Ritmo de dibujo y de las líneas de información. |
 | `secuencia.py` | `TOLERANCIA`, `ESPERA_ARRANQUE` | 0,01, 2,0 | rad, s | Cuándo se da un punto por alcanzado y cuánto se espera a que arranque el programa. |
+| `secuencia.py` | `ESPERA_ESTADO` | 3,0 | s | Máximo que se espera a un estado reciente antes de enviar el primer `movej`. |
+| `secuencia.py` | `MAX_PUNTOS`, `MAX_BYTES_FICHERO` | 1000, 1 000 000 | puntos, bytes | Tope de un fichero de secuencia. |
+| `simulador.py` | `MAX_PREVIEW` | 20,0 | s | Duración máxima de `previsualizar` (bloquea el hilo principal). |
+| `simulador.py` | `LIMITE_POSE` | 100 | m y rad | Máximo de cada valor de la posición de una base. |
 | `main.py` | `--v`, `--a` (solo `ensenar`) | 0,1 / 0,2 | rad/s / rad/s² | Velocidad y aceleración de cada `movej`. |
 | `main.py` | `--ip`, `--puerto`, `--config` | `127.0.0.1`, 30001 / 30003, `robots.json` | | Robot y fichero de robots. |
 
@@ -112,5 +128,9 @@ Primero se probaría en URSim, nunca en el UR3e directamente.
 - Cualquier mensaje tipo 20 con subtipo 6 o 10 (error o excepción de programa) detiene la secuencia, **sin mirar `reportLevel`**: es lo más seguro, pero un aviso informativo del robot también pararía un movimiento. No se ha podido comprobar qué niveles emite un UR3e.
 - El formato de 251 B del subpaquete de articulaciones y el offset 252 del tiempo real **no están verificados con un robot real**; si un robot manda otro tamaño, `ur.py` lanza `ErrorUR` en lugar de adivinar.
 - `Simulador.previsualizar` bloquea el hilo principal unos segundos: durante ese tiempo los mensajes del robot se acumulan y, al terminar, se procesan de golpe (el robot simulado salta por posiciones atrasadas un instante). Es el comportamiento de `claude_2`; no se ha medido con un robot real.
+- `Reproductor` en `MOVIENDO` no tiene vigilante de tiempo: si `isProgramRunning` no baja nunca (programa pausado en el pendant), espera hasta que el usuario cancele con `c`. No se avisa por duración (D14).
+- `b`, `l` y `g` siguen aceptándose con el `Reproductor` en `PARADA`: el `Reproductor` ya no revienta si la secuencia cambia (avisa «la secuencia ha cambiado»), pero **no se impide** el cambio (queda para la capa 4, en `tareas.py`).
+- `Simulador.cerrar()` llama a `pybullet.disconnect()`: **no se ha comprobado con la ventana real** (no se abren ventanas al probar). Si la librería real no cierra así, la ventana depende de que acabe el proceso.
+- El modo del robot (`robotMode`) no bloquea ningún movimiento porque su decodificación no está verificada con un robot real.
 - `UR3eRG2` abre siempre la ventana (`gui=True` fijo): no se puede ejecutar sin pantalla.
 - Los formatos de tipo 20 (subtipos 6 y 10), los 251 B del subpaquete 1 y el offset 252 del tiempo real salen del enunciado a través de `claude_2` y **no están verificados** con un robot (ver [pruebas](pruebas.md)).
