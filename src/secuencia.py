@@ -28,18 +28,14 @@ class ErrorSecuencia(Exception):
     """No se puede leer o guardar el fichero de la secuencia. El mensaje dice cual y por que."""
 
 
-class Secuencia:
-    def __init__(self):
-        self.puntos = []
-
-    def __len__(self):
-        return len(self.puntos)
+class Secuencia(list):
+    """Lista de puntos (cada uno, 6 angulos en rad) que se puede guardar y cargar en JSON."""
 
     def guardar(self, ruta):
         """Lanza ErrorSecuencia si no se puede escribir."""
         try:
             with open(ruta, "w", encoding="utf-8") as f:
-                json.dump(self.puntos, f)
+                json.dump(self, f)
         except OSError as e:
             raise ErrorSecuencia("no se puede guardar {}: {}".format(ruta, e)) from e
 
@@ -52,7 +48,7 @@ class Secuencia:
             raise ErrorSecuencia("no se puede leer {}: {}".format(ruta, e)) from e
         if not isinstance(puntos, list) or not all(ur.es_punto_valido(p) for p in puntos):
             raise ErrorSecuencia("{}: debe ser una lista de puntos de 6 angulos en rad entre -2pi y 2pi".format(ruta))
-        self.puntos = puntos
+        self[:] = puntos
 
 
 class Reproductor:
@@ -91,11 +87,11 @@ class Reproductor:
         elif not self.robot.estado_fresco():
             print("Sin datos actuales del robot: no guardo el punto")
         else:
-            self.secuencia.puntos.append(list(self.q))
+            self.secuencia.append(list(self.q))
             print("Punto {} guardado".format(len(self.secuencia)))
 
     def ejecutar(self):
-        if not len(self.secuencia) or self.q is None:
+        if not self.secuencia or self.q is None:
             print("Nada que ejecutar")
         elif self.fase == PARADA:
             print("Hay una parada pendiente: 'r' para reanudar o 'c' para cancelar")
@@ -159,7 +155,7 @@ class Reproductor:
             self.fase = MOVIENDO
         elif self.ocupado and not self.ejecutando and (self.fase == MOVIENDO or time.monotonic() - self.t_envio > ESPERA_ARRANQUE):
             # el programa ha terminado (o nunca arranco): se comprueba si el robot esta en el punto
-            if max(abs(a - b) for a, b in zip(self.q, self.secuencia.puntos[self.i])) < TOLERANCIA:
+            if max(abs(a - b) for a, b in zip(self.q, self.secuencia[self.i])) < TOLERANCIA:
                 self.i += 1
                 if self.i < len(self.secuencia):
                     self._enviar_punto()
@@ -174,7 +170,7 @@ class Reproductor:
     # ---------- internos ----------
     def _enviar_punto(self):
         try:
-            self.robot.movej(self.secuencia.puntos[self.i], velocidad=self.velocidad, aceleracion=self.aceleracion)
+            self.robot.movej(self.secuencia[self.i], velocidad=self.velocidad, aceleracion=self.aceleracion)
         except (ValueError, ur.ErrorUR) as e:       # punto/velocidad no validos, o sin estado fresco / sin conexion
             self._fallar("punto {}: {}".format(self.i + 1, e))
             return

@@ -48,11 +48,11 @@ def main():
             parser.error("--a debe estar en [{}, {}] rad/s2".format(ur.MINIMO, ur.ACELERACION_MAX))
     try:
         if args.orden == "primaria":
-            tareas.visualizar_primaria(args.ip, args.puerto)
+            tareas.visualizar({"robot": ur.UrPrimaria(args.ip, args.puerto)})
         elif args.orden == "tiempo-real":
-            tareas.visualizar_tiempo_real(args.ip, args.puerto)
+            tareas.visualizar({"robot": ur.UrTiempoReal(args.ip, args.puerto)})
         elif args.orden == "varios":
-            tareas.visualizar_varios(args.config)
+            tareas.visualizar(tareas.cargar_robots(args.config))
         else:
             tareas.ensenar_reproducir(args.ip, args.puerto, args.velocidad, args.aceleracion)
     except KeyboardInterrupt:           # es la forma normal de parar

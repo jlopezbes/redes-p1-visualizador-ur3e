@@ -4,9 +4,8 @@ Las cuatro tareas de la practica, como funciones que juntan los controladores:
     simulador.Simulador                             dibuja en PyBullet
     secuencia.Secuencia / secuencia.Reproductor     enseñar y reproducir
 
-    visualizar_primaria(ip, puerto)         un robot, interfaz primaria (30001)      -> aprobado
-    visualizar_tiempo_real(ip, puerto)      un robot, interfaz de tiempo real (30003) -> aprobado
-    visualizar_varios(ruta)                 los robots de un JSON, un hilo por robot  -> notable
+    visualizar(clientes)                    uno o varios robots, un hilo por robot   -> aprobado (uno) y notable (varios)
+    cargar_robots(ruta)                     los clientes de los robots de un JSON de IPs
     ensenar_reproducir(ip, puerto, v, a)    enseñar puntos y reproducirlos           -> sobresaliente
 
 PyBullet solo se toca desde el hilo que llama a estas funciones; los hilos de ur.LectorUR solo leen sockets.
@@ -25,13 +24,15 @@ from secuencia import LIBRE, ErrorSecuencia, Reproductor, Secuencia
 from simulador import Simulador
 
 
-def _visualizar(lectores, posiciones):
-    """Mueve cada robot simulado a su ultimo q y escribe una linea por robot cada segundo. Termina con Ctrl+C.
-    Al salir, por lo que sea, detiene los hilos lectores. Un robot desconectado no se mueve."""
+def visualizar(clientes):
+    """clientes: {nombre: UrPrimaria o UrTiempoReal sin conectar}. Mueve cada robot simulado a su ultimo q y escribe
+    una linea por robot cada segundo. Los robots se colocan en fila, a 1 m uno de otro (el primero en el origen).
+    Termina con Ctrl+C. Al salir, por lo que sea, detiene los hilos lectores. Un robot desconectado no se mueve."""
+    lectores = [ur.LectorUR(nombre, cliente) for nombre, cliente in clientes.items()]
     contados = {l.nombre: 0 for l in lectores}
     with Simulador() as simulador:
-        for lector, posicion in zip(lectores, posiciones):
-            simulador.agregar_robot(lector.nombre, posicion)
+        for i, lector in enumerate(lectores):
+            simulador.agregar_robot(lector.nombre, [i, 0, 0, 0, 0, 0])
         try:
             for lector in lectores:
                 lector.start()
@@ -57,27 +58,18 @@ def _visualizar(lectores, posiciones):
                 lector.detener()
 
 
-def visualizar_primaria(ip, puerto):
-    _visualizar([ur.LectorUR("robot", ur.UrPrimaria(ip, puerto))], [None])
-
-
-def visualizar_tiempo_real(ip, puerto):
-    _visualizar([ur.LectorUR("robot", ur.UrTiempoReal(ip, puerto))], [None])
-
-
-def visualizar_varios(ruta):
-    """ruta: JSON [{"nombre", "ip", "puerto", "posicion": [x, y, z, roll, pitch, yaw]}, ...]. Todos por la primaria.
+def cargar_robots(ruta):
+    """JSON [{"nombre": "robot1", "ip": "10.172.18.74"}, ...] -> {nombre: UrPrimaria} (puerto 30001, el del protocolo).
     Lanza ValueError si no se puede leer o le falta algo."""
     try:
         with open(ruta, encoding="utf-8-sig") as f:         # utf-8-sig: tolera el BOM que anade el Bloc de notas
             robots = json.load(f)
-        lectores = [ur.LectorUR(r["nombre"], ur.UrPrimaria(r["ip"], r["puerto"])) for r in robots]
-        posiciones = [r["posicion"] for r in robots]
-    except (OSError, ValueError, KeyError, TypeError) as e:     # fichero, JSON, campo que falta, IP o puerto malos
+        clientes = {r["nombre"]: ur.UrPrimaria(r["ip"]) for r in robots}
+    except (OSError, ValueError, KeyError, TypeError) as e:     # fichero, JSON, campo que falta, IP mala
         raise ValueError("{}: {}: {}".format(ruta, type(e).__name__, e)) from e
-    if not lectores:
+    if not clientes:
         raise ValueError("{}: no hay ningun robot".format(ruta))
-    _visualizar(lectores, posiciones)
+    return clientes
 
 
 # ---------- enseñar y reproducir ----------
@@ -109,13 +101,13 @@ def _comando(linea, rep, simulador):
     elif orden == "g":
         rep.guardar_punto()
     elif orden == "b":
-        rep.secuencia.puntos = []
+        rep.secuencia.clear()
         print("Secuencia borrada")
     elif orden == "v":
-        if not len(rep.secuencia) or rep.q is None:
+        if not rep.secuencia or rep.q is None:
             print("Nada que previsualizar")
         else:
-            simulador.previsualizar("robot", rep.q, rep.secuencia.puntos)
+            simulador.previsualizar("robot", rep.q, rep.secuencia)
     elif orden == "e":
         rep.ejecutar()
     elif orden == "r":
