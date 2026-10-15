@@ -1,6 +1,6 @@
 """
 Las cuatro tareas de la practica, como funciones que juntan los controladores:
-    ur.UrPrimaria / ur.UrTiempoReal / ur.LectorUR   hablan con el robot
+    ur.ClienteUR / ur.HiloLectorUR                  hablan con el robot
     simulador.Simulador                             dibuja en PyBullet
     secuencia.Secuencia / secuencia.Reproductor     enseñar y reproducir
 
@@ -8,10 +8,10 @@ Las cuatro tareas de la practica, como funciones que juntan los controladores:
     cargar_robots(ruta)                     los clientes de los robots de un JSON de IPs
     ensenar_reproducir(ip, puerto, v, a)    enseñar puntos y reproducirlos           -> sobresaliente
 
-PyBullet solo se toca desde el hilo que llama a estas funciones; los hilos de ur.LectorUR solo leen sockets.
+PyBullet solo se toca desde el hilo que llama a estas funciones; los hilos de ur.HiloLectorUR solo leen sockets.
 Orden en todas: primero se crean los clientes (validan IP y puerto, ValueError, sin abrir red) y despues el
 simulador, dentro de `with`: asi un argumento malo falla antes de abrir la ventana y la ventana se cierra siempre.
-Los errores de las capas de abajo (ErrorUR, ErrorSimulador, ErrorSecuencia) los muestra main.py.
+Los errores de las capas de abajo (ErrorRed, ErrorSimulador, ErrorSecuencia) los muestra main.py.
 """
 import json
 import math
@@ -20,15 +20,16 @@ import threading
 import time
 
 import ur
+from red import ErrorRed
 from secuencia import LIBRE, ErrorSecuencia, Reproductor, Secuencia
 from simulador import Simulador
 
 
 def visualizar(clientes):
-    """clientes: {nombre: UrPrimaria o UrTiempoReal sin conectar}. Mueve cada robot simulado a su ultimo q y escribe
-    una linea por robot cada segundo. Los robots se colocan en fila, a 1 m uno de otro (el primero en el origen).
+    """clientes: {nombre: ClienteUR sin conectar}. Mueve cada robot simulado a su ultimo q y escribe una linea por
+    robot cada segundo. Los robots se colocan en fila, a 1 m uno de otro (el primero en el origen).
     Termina con Ctrl+C. Al salir, por lo que sea, detiene los hilos lectores. Un robot desconectado no se mueve."""
-    lectores = [ur.LectorUR(nombre, cliente) for nombre, cliente in clientes.items()]
+    lectores = [ur.HiloLectorUR(nombre, cliente) for nombre, cliente in clientes.items()]
     contados = {l.nombre: 0 for l in lectores}
     with Simulador() as simulador:
         for i, lector in enumerate(lectores):
@@ -39,13 +40,13 @@ def visualizar(clientes):
             t_info = time.time()
             while True:
                 for lector in lectores:
-                    q = lector.ultimo_q()
+                    q = lector.q
                     if q:
                         simulador.mover(lector.nombre, q)
                 ahora = time.time()
                 if ahora - t_info >= 1.0:
                     for lector in lectores:
-                        q = lector.ultimo_q()
+                        q = lector.q
                         por_segundo = (lector.recibidos - contados[lector.nombre]) / (ahora - t_info)
                         contados[lector.nombre] = lector.recibidos
                         print("[{}] {:.0f} estados/s | q (grados): {}".format(
@@ -59,12 +60,12 @@ def visualizar(clientes):
 
 
 def cargar_robots(ruta):
-    """JSON [{"nombre": "robot1", "ip": "10.172.18.74"}, ...] -> {nombre: UrPrimaria} (puerto 30001, el del protocolo).
+    """JSON [{"nombre": "robot1", "ip": "10.172.18.74"}, ...] -> {nombre: ClienteUR} (primaria, puerto 30001).
     Lanza ValueError si no se puede leer o le falta algo."""
     try:
         with open(ruta, encoding="utf-8-sig") as f:         # utf-8-sig: tolera el BOM que anade el Bloc de notas
             robots = json.load(f)
-        clientes = {r["nombre"]: ur.UrPrimaria(r["ip"]) for r in robots}
+        clientes = {r["nombre"]: ur.ClienteUR(r["ip"]) for r in robots}
     except (OSError, ValueError, KeyError, TypeError) as e:     # fichero, JSON, campo que falta, IP mala
         raise ValueError("{}: {}: {}".format(ruta, type(e).__name__, e)) from e
     if not clientes:
@@ -132,7 +133,7 @@ def _comando(linea, rep, simulador):
 def ensenar_reproducir(ip, puerto, velocidad, aceleracion):
     """Enseñar y reproducir con la interfaz primaria. El estado se lee y las ordenes se envian por el MISMO socket.
     velocidad en rad/s y aceleracion en rad/s2 de cada movej (maximo 0,3 y 0,5: ver ur.py)."""
-    robot = ur.UrPrimaria(ip, puerto)
+    robot = ur.ClienteUR(ip, puerto)
     rep = Reproductor(robot, Secuencia(), velocidad, aceleracion)
     comandos = queue.Queue()
     try:
@@ -145,15 +146,15 @@ def ensenar_reproducir(ip, puerto, velocidad, aceleracion):
                 try:
                     robot.conectar()
                     print("Conectado a {}:{}. {}".format(ip, puerto, AYUDA))
-                    for tipo, mensaje in robot.mensajes():
-                        rep.procesar(tipo, mensaje)
+                    for datos in robot.mensajes():
+                        rep.procesar(datos)
                         if rep.q:
                             simulador.mover("robot", rep.q)
                         while not comandos.empty() and not salir:
                             salir = _comando(comandos.get(), rep, simulador)
                         if salir:
                             break
-                except ur.ErrorUR as e:     # red caida, robot que cierra o no envia estados, mensajes que no se entienden
+                except ErrorRed as e:       # red caida, robot que cierra o calla, mensajes que no se entienden
                     print("Conexion perdida ({}). Reintentando en {} s...".format(e, ur.REINTENTO))
                     rep.conexion_perdida()
                     try:                    # mientras espera, la consola sigue atendida: con 'q' se sale al instante
@@ -163,4 +164,4 @@ def ensenar_reproducir(ip, puerto, velocidad, aceleracion):
     finally:                                # q, Ctrl+C, ventana cerrada o un bug: el robot no se queda en marcha
         if rep.ocupado:
             rep.cancelar()
-        robot.cerrar()
+        robot.desconectar()

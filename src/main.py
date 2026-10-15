@@ -18,6 +18,7 @@ import sys
 
 import tareas
 import ur
+from red import ErrorRed
 from secuencia import ErrorSecuencia
 from simulador import ErrorSimulador
 
@@ -27,8 +28,8 @@ def main():
     orden = parser.add_subparsers(dest="orden")
     orden.required = True
 
-    for nombre, puerto in (("primaria", ur.UrPrimaria.PUERTO), ("tiempo-real", ur.UrTiempoReal.PUERTO),
-                           ("ensenar", ur.UrPrimaria.PUERTO)):
+    for nombre, puerto in (("primaria", ur.PUERTO_PRIMARIA), ("tiempo-real", ur.PUERTO_TIEMPO_REAL),
+                           ("ensenar", ur.PUERTO_PRIMARIA)):
         p = orden.add_parser(nombre)
         p.add_argument("--ip", default="127.0.0.1", help="IP del robot, p. ej. 10.172.21.203 (no un nombre)")
         p.add_argument("--puerto", type=int, default=puerto, help="puerto TCP (1-65535)")
@@ -48,16 +49,16 @@ def main():
             parser.error("--a debe estar en [{}, {}] rad/s2".format(ur.MINIMO, ur.ACELERACION_MAX))
     try:
         if args.orden == "primaria":
-            tareas.visualizar({"robot": ur.UrPrimaria(args.ip, args.puerto)})
+            tareas.visualizar({"robot": ur.ClienteUR(args.ip, args.puerto)})
         elif args.orden == "tiempo-real":
-            tareas.visualizar({"robot": ur.UrTiempoReal(args.ip, args.puerto)})
+            tareas.visualizar({"robot": ur.ClienteUR(args.ip, args.puerto, tiempo_real=True)})
         elif args.orden == "varios":
             tareas.visualizar(tareas.cargar_robots(args.config))
         else:
             tareas.ensenar_reproducir(args.ip, args.puerto, args.velocidad, args.aceleracion)
     except KeyboardInterrupt:           # es la forma normal de parar
         pass
-    except (ValueError, ur.ErrorUR, ErrorSimulador, ErrorSecuencia) as e:   # ValueError: IP, puerto o robots.json mal puestos
+    except (ValueError, ErrorRed, ErrorSimulador, ErrorSecuencia) as e:   # ValueError: IP, puerto o robots.json mal puestos
         print("Error: {}".format(e), file=sys.stderr)
         sys.exit(2 if isinstance(e, ValueError) else 1)
     # Cualquier otra excepcion es un fallo del programa: Python imprime el traceback y sale con codigo 1

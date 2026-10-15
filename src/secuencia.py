@@ -10,13 +10,14 @@ Fases del Reproductor (self.fase):
     MOVIENDO         el robot esta ejecutando el movej (isProgramRunning)
     PARADA           algo fallo: se intento enviar stopj y se espera 'reanudar' o 'cancelar'
 
-El Reproductor no abre sockets ni ventanas: recibe un robot (UrPrimaria) y los mensajes que llegan de el.
-Hacia fuera no deja salir ErrorUR: lo trata dentro (parada, aviso y fase). De los ficheros solo sale ErrorSecuencia.
+El Reproductor no abre sockets ni ventanas: recibe un robot (ClienteUR) y los mensajes que llegan de el.
+Hacia fuera no deja salir ErrorRed: lo trata dentro (parada, aviso y fase). De los ficheros solo sale ErrorSecuencia.
 """
 import json
 import time
 
 import ur
+from red import ErrorRed
 
 LIBRE, ENVIADO, MOVIENDO, PARADA = None, "enviado", "moviendo", "parada"
 
@@ -53,7 +54,7 @@ class Secuencia(list):
 
 class Reproductor:
     def __init__(self, robot, secuencia, velocidad, aceleracion):
-        """robot: UrPrimaria ya conectada. velocidad en rad/s y aceleracion en rad/s2 de los movej."""
+        """robot: ClienteUR (primaria) ya conectado. velocidad en rad/s y aceleracion en rad/s2 de los movej."""
         self.robot = robot
         self.secuencia = secuencia
         self.velocidad = velocidad
@@ -84,8 +85,6 @@ class Reproductor:
     def guardar_punto(self):
         if self.q is None:
             print("Todavia no se ha recibido la posicion del robot")
-        elif not self.robot.estado_fresco():
-            print("Sin datos actuales del robot: no guardo el punto")
         else:
             self.secuencia.append(list(self.q))
             print("Punto {} guardado".format(len(self.secuencia)))
@@ -126,28 +125,19 @@ class Reproductor:
             print("Secuencia interrumpida en el punto {}: 'r' para reanudar o 'c' para cancelar".format(self.i + 1))
 
     # ---------- supervision: se llama con cada mensaje del robot ----------
-    def procesar(self, tipo, mensaje):
-        try:
-            if tipo == ur.TIPO_ROBOT_MESSAGE:
-                error = ur.leer_error(mensaje)
-                if error:
-                    print("ERROR del robot: " + error)
-                    if self.ocupado:
-                        self._fallar(error)
-            elif tipo == ur.TIPO_ESTADO:
-                self._procesar_estado(ur.leer_estado(mensaje))
-        except ur.ErrorUR as e:             # mensaje cortado o mal formado: no se sabe en que estado esta el robot
-            print("Aviso: mensaje del robot no valido ({})".format(e))
+    def procesar(self, datos):
+        """datos: un mensaje del robot ya decodificado (ver ClienteUR.mensajes)."""
+        if "error" in datos:
+            print("ERROR del robot: " + datos["error"])
             if self.ocupado:
-                self._fallar("mensaje del robot no valido")
-
-    def _procesar_estado(self, estado):
-        if "q" in estado:
-            self.q = estado["q"]
-        self.ejecutando = estado.get("ejecutando", self.ejecutando)
-        self.protegido = estado.get("protegido", self.protegido)
-        self.emergencia = estado.get("emergencia", self.emergencia)
-        self.modo = estado.get("modo", self.modo)
+                self._fallar(datos["error"])
+            return
+        if "q" in datos:
+            self.q = datos["q"]
+        self.ejecutando = datos.get("ejecutando", self.ejecutando)
+        self.protegido = datos.get("protegido", self.protegido)
+        self.emergencia = datos.get("emergencia", self.emergencia)
+        self.modo = datos.get("modo", self.modo)
 
         if self.ocupado and self._motivo_bloqueo():
             self._fallar(self._motivo_bloqueo())
@@ -171,7 +161,7 @@ class Reproductor:
     def _enviar_punto(self):
         try:
             self.robot.movej(self.secuencia[self.i], velocidad=self.velocidad, aceleracion=self.aceleracion)
-        except (ValueError, ur.ErrorUR) as e:       # punto/velocidad no validos, o sin estado fresco / sin conexion
+        except (ValueError, ErrorRed) as e:         # punto o velocidad no validos, o sin conexion
             self._fallar("punto {}: {}".format(self.i + 1, e))
             return
         self.fase = ENVIADO
@@ -182,7 +172,7 @@ class Reproductor:
         """Intenta frenar el robot (stopj). Si no puede, lo dice muy claro."""
         try:
             self.robot.stopj(self.aceleracion)
-        except ur.ErrorUR as e:
+        except ErrorRed as e:
             print("*** NO SE HA PODIDO ENVIAR LA PARADA ({}): el robot puede seguir moviendose hasta el punto {}. "
                   "PARALO CON EL BOTON DEL PENDANT ***".format(e, (self.i or 0) + 1))
         else:
