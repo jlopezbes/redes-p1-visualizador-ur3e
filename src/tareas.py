@@ -27,13 +27,12 @@ from simulador import Simulador
 
 def visualizar(clientes):
     """clientes: {nombre: ClienteUR sin conectar}. Mueve cada robot simulado a su ultimo q y escribe una linea por
-    robot cada segundo. Los robots se colocan en fila, a 1 m uno de otro (el primero en el origen).
-    Termina con Ctrl+C. Al salir, por lo que sea, detiene los hilos lectores. Un robot desconectado no se mueve."""
+    robot cada segundo. Termina con Ctrl+C. Al salir, por lo que sea, detiene los hilos lectores. Un robot desconectado no se mueve."""
     lectores = [ur.HiloLectorUR(nombre, cliente) for nombre, cliente in clientes.items()]
     contados = {l.nombre: 0 for l in lectores}
     with Simulador() as simulador:
-        for i, lector in enumerate(lectores):
-            simulador.agregar_robot(lector.nombre, [i, 0, 0, 0, 0, 0])
+        for lector in lectores:
+            simulador.agregar_robot(lector.nombre)
         try:
             for lector in lectores:
                 lector.start()

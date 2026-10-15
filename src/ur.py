@@ -43,7 +43,8 @@ MAX_LONGITUD = 65536    # un paquete mas largo significa que el buffer esta desa
 VELOCIDAD_MAX = 0.3     # rad/s
 ACELERACION_MAX = 0.5   # rad/s2
 MINIMO = 0.001          # rad/s y rad/s2: por debajo Python escribiria 1e-05 y no se sabe si URScript lo admite
-LIMITE_Q_LECTURA = 2 * math.pi + 0.2    # rad: lo usa simulador.py (se revisa en la capa 4)
+
+MAX_IGNORADOS = 100     # paquetes seguidos sin ningun dato util: se supone puerto o interfaz equivocados
 
 REINTENTO = 2.0         # s entre intentos de reconexion
 
@@ -72,22 +73,29 @@ class ClienteUR:
     # ---------- conexion ----------
     def conectar(self):
         self._buffer.clear()        # lo que quedara de una conexion anterior no vale
-        self.red.abrir()
+        self.red.conectar()
 
     def desconectar(self):
-        self.red.cerrar()
+        self.red.desconectar()
 
     # ---------- lo que dice el robot ----------
     def mensajes(self):
         """Generador de lo que dice el robot, un dict por mensaje: 'q' (6 q_actual, rad) y, solo en la primaria, 'ejecutando',
         'protegido', 'emergencia' y 'modo'; o {'error': texto} si el robot informa de un error. Lanza ErrorRed."""
+        ignorados = 0
         while True:
-            self._buffer += self.red.recibir(65536)
+            self._buffer += self.red.recibir()
             paquete = self._cortar()
             while paquete is not None:
                 datos = self._decodificar(paquete)
-                if datos:               # {} = un mensaje que no interesa
+                if datos:
+                    ignorados = 0
                     yield datos
+                else:                   # {} = un mensaje que no interesa
+                    ignorados += 1
+                    if ignorados > MAX_IGNORADOS:
+                        raise ErrorRed("{}: llegan datos pero ninguno es un estado (puerto o interfaz equivocados? "
+                                       "primaria = 30001, tiempo real = 30003)".format(self.red.destino))
                 paquete = self._cortar()
 
     def _cortar(self):
