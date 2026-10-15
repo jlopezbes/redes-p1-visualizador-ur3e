@@ -52,7 +52,7 @@ def main():
         elif args.orden == "tiempo-real":
             tareas.visualizar_tiempo_real(args.ip, args.puerto)
         elif args.orden == "varios":
-            tareas.visualizar_varios(tareas.cargar_robots(args.config))
+            tareas.visualizar_varios(args.config)
         else:
             tareas.ensenar_reproducir(args.ip, args.puerto, args.velocidad, args.aceleracion)
     except KeyboardInterrupt:           # es la forma normal de parar

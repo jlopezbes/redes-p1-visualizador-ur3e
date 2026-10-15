@@ -6,7 +6,7 @@ Las cuatro tareas de la practica, como funciones que juntan los controladores:
 
     visualizar_primaria(ip, puerto)         un robot, interfaz primaria (30001)      -> aprobado
     visualizar_tiempo_real(ip, puerto)      un robot, interfaz de tiempo real (30003) -> aprobado
-    visualizar_varios(robots)               varios robots, un hilo por robot         -> notable
+    visualizar_varios(ruta)                 los robots de un JSON, un hilo por robot  -> notable
     ensenar_reproducir(ip, puerto, v, a)    enseñar puntos y reproducirlos           -> sobresaliente
 
 PyBullet solo se toca desde el hilo que llama a estas funciones; los hilos de ur.LectorUR solo leen sockets.
@@ -24,80 +24,60 @@ import ur
 from secuencia import LIBRE, ErrorSecuencia, Reproductor, Secuencia
 from simulador import Simulador
 
-HZ_DIBUJO = 30            # veces por segundo que se redibuja el simulador
-PERIODO_INFO = 1.0        # s entre dos lineas de informacion por consola
-
-
-def cargar_robots(ruta):
-    """Lee el JSON de robots: [{"nombre", "ip", "puerto", "posicion": [x, y, z, roll, pitch, yaw]}, ...].
-    Lanza ValueError (en español) si no se puede leer o le falta algo. IP, puerto y posicion los valida quien los usa."""
-    try:
-        with open(ruta, encoding="utf-8-sig") as f:         # utf-8-sig: tolera el BOM que anade el Bloc de notas
-            robots = json.load(f)
-    except (OSError, ValueError) as e:                      # incluye JSONDecodeError
-        raise ValueError("{}: no se puede leer ({})".format(ruta, e)) from e
-    if not isinstance(robots, list) or not robots:
-        raise ValueError("{}: debe ser una lista con al menos un robot".format(ruta))
-    for r in robots:
-        for campo in ("nombre", "ip", "puerto", "posicion"):
-            if not isinstance(r, dict) or campo not in r:
-                raise ValueError("{}: a un robot le falta el campo '{}'".format(ruta, campo))
-    nombres = [r["nombre"] for r in robots]
-    if not all(isinstance(n, str) and n for n in nombres) or len(set(nombres)) != len(nombres):
-        raise ValueError("{}: los nombres de los robots deben ser textos distintos".format(ruta))
-    return robots
-
-
-def _dibujar(simulador, lectores):
-    """Bucle principal: mueve cada robot simulado a su ultimo q y escribe una linea por robot cada PERIODO_INFO s.
-    Un robot desconectado no se mueve. Termina con Ctrl+C. Al salir, por lo que sea, detiene los hilos lectores."""
-    contados = {l.nombre: l.recibidos for l in lectores}
-    t_info = time.time()
-    try:
-        while True:
-            for lector in lectores:
-                q = lector.ultimo_q()
-                if q:
-                    simulador.mover(lector.nombre, q)
-            ahora = time.time()
-            if ahora - t_info >= PERIODO_INFO:
-                for lector in lectores:
-                    q = lector.ultimo_q()
-                    por_segundo = (lector.recibidos - contados[lector.nombre]) / (ahora - t_info)
-                    contados[lector.nombre] = lector.recibidos
-                    print("[{}] {:.0f} estados/s | q (grados): {}".format(
-                        lector.nombre, por_segundo,
-                        [round(math.degrees(a), 1) for a in q] if q else (lector.ultimo_error or "sin datos")))
-                t_info = ahora
-            time.sleep(1.0 / HZ_DIBUJO)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        for lector in lectores:
-            lector.detener()
-
 
 def _visualizar(lectores, posiciones):
+    """Mueve cada robot simulado a su ultimo q y escribe una linea por robot cada segundo. Termina con Ctrl+C.
+    Al salir, por lo que sea, detiene los hilos lectores. Un robot desconectado no se mueve."""
+    contados = {l.nombre: 0 for l in lectores}
     with Simulador() as simulador:
         for lector, posicion in zip(lectores, posiciones):
             simulador.agregar_robot(lector.nombre, posicion)
-        for lector in lectores:
-            lector.start()
-        _dibujar(simulador, lectores)
+        try:
+            for lector in lectores:
+                lector.start()
+            t_info = time.time()
+            while True:
+                for lector in lectores:
+                    q = lector.ultimo_q()
+                    if q:
+                        simulador.mover(lector.nombre, q)
+                ahora = time.time()
+                if ahora - t_info >= 1.0:
+                    for lector in lectores:
+                        q = lector.ultimo_q()
+                        por_segundo = (lector.recibidos - contados[lector.nombre]) / (ahora - t_info)
+                        contados[lector.nombre] = lector.recibidos
+                        print("[{}] {:.0f} estados/s | q (grados): {}".format(
+                            lector.nombre, por_segundo,
+                            [round(math.degrees(a), 1) for a in q] if q else (lector.ultimo_error or "sin datos")))
+                    t_info = ahora
+                time.sleep(1 / 30)              # 30 redibujados por segundo
+        finally:
+            for lector in lectores:
+                lector.detener()
 
 
-def visualizar_primaria(ip, puerto=ur.UrPrimaria.PUERTO):
+def visualizar_primaria(ip, puerto):
     _visualizar([ur.LectorUR("robot", ur.UrPrimaria(ip, puerto))], [None])
 
 
-def visualizar_tiempo_real(ip, puerto=ur.UrTiempoReal.PUERTO):
+def visualizar_tiempo_real(ip, puerto):
     _visualizar([ur.LectorUR("robot", ur.UrTiempoReal(ip, puerto))], [None])
 
 
-def visualizar_varios(robots):
-    """robots: lista de dicts como los de cargar_robots(). Todos por la interfaz primaria."""
-    lectores = [ur.LectorUR(r["nombre"], ur.UrPrimaria(r["ip"], r["puerto"])) for r in robots]
-    _visualizar(lectores, [r["posicion"] for r in robots])
+def visualizar_varios(ruta):
+    """ruta: JSON [{"nombre", "ip", "puerto", "posicion": [x, y, z, roll, pitch, yaw]}, ...]. Todos por la primaria.
+    Lanza ValueError si no se puede leer o le falta algo."""
+    try:
+        with open(ruta, encoding="utf-8-sig") as f:         # utf-8-sig: tolera el BOM que anade el Bloc de notas
+            robots = json.load(f)
+        lectores = [ur.LectorUR(r["nombre"], ur.UrPrimaria(r["ip"], r["puerto"])) for r in robots]
+        posiciones = [r["posicion"] for r in robots]
+    except (OSError, ValueError, KeyError, TypeError) as e:     # fichero, JSON, campo que falta, IP o puerto malos
+        raise ValueError("{}: {}: {}".format(ruta, type(e).__name__, e)) from e
+    if not lectores:
+        raise ValueError("{}: no hay ningun robot".format(ruta))
+    _visualizar(lectores, posiciones)
 
 
 # ---------- enseñar y reproducir ----------
@@ -125,11 +105,11 @@ def _comando(linea, rep, simulador):
     if orden == "c":
         rep.cancelar()
     elif rep.fase != LIBRE and orden != "r":
-        print("Secuencia en marcha, parada o a la espera: solo 'c' (cancelar), 'r' (reanudar) o 'q'")
+        print("Secuencia en marcha o parada: solo 'c' (cancelar), 'r' (reanudar) o 'q'")
     elif orden == "g":
         rep.guardar_punto()
     elif orden == "b":
-        rep.secuencia.borrar()
+        rep.secuencia.puntos = []
         print("Secuencia borrada")
     elif orden == "v":
         if not len(rep.secuencia) or rep.q is None:
@@ -157,7 +137,7 @@ def _comando(linea, rep, simulador):
     return False
 
 
-def ensenar_reproducir(ip, puerto=ur.UrPrimaria.PUERTO, velocidad=0.1, aceleracion=0.2):
+def ensenar_reproducir(ip, puerto, velocidad, aceleracion):
     """Enseñar y reproducir con la interfaz primaria. El estado se lee y las ordenes se envian por el MISMO socket.
     velocidad en rad/s y aceleracion en rad/s2 de cada movej (maximo 0,3 y 0,5: ver ur.py)."""
     robot = ur.UrPrimaria(ip, puerto)
