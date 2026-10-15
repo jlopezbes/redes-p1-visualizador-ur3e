@@ -15,17 +15,14 @@ configuracion (robots.json) mal puestos.
 import argparse
 import os
 import sys
-import traceback
 
 import tareas
 import ur
 from secuencia import ErrorSecuencia
 from simulador import ErrorSimulador
 
-CARPETA = os.path.dirname(os.path.abspath(__file__))
 
-
-def crear_parser():
+def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     orden = parser.add_subparsers(dest="orden")
     orden.required = True
@@ -40,12 +37,9 @@ def crear_parser():
             p.add_argument("--a", dest="aceleracion", type=float, default=0.2, help="rad/s2 (0,001 a 0,5)")
 
     varios = orden.add_parser("varios")
-    varios.add_argument("--config", default=os.path.join(CARPETA, "robots.json"), help="fichero JSON de robots")
-    return parser
+    varios.add_argument("--config", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "robots.json"),
+                        help="fichero JSON de robots")
 
-
-def main():
-    parser = crear_parser()
     args = parser.parse_args()
     if args.orden == "ensenar":         # mejor rechazarlo al arrancar que al enviar el primer punto
         if not ur.MINIMO <= args.velocidad <= ur.VELOCIDAD_MAX:
@@ -63,18 +57,10 @@ def main():
             tareas.ensenar_reproducir(args.ip, args.puerto, args.velocidad, args.aceleracion)
     except KeyboardInterrupt:           # es la forma normal de parar
         pass
-    except (ValueError, OSError) as e:  # IP, puerto o robots.json mal puestos
-        _salir(2, e)
-    except (ur.ErrorUR, ErrorSimulador, ErrorSecuencia) as e:
-        _salir(1, e)
-    except Exception:                   # ultima defensa: un fallo del programa, no del uso
-        traceback.print_exc()
-        _salir(1, "fallo inesperado del programa (ver arriba)")
-
-
-def _salir(codigo, motivo):
-    print("Error: {}".format(motivo), file=sys.stderr)
-    sys.exit(codigo)
+    except (ValueError, ur.ErrorUR, ErrorSimulador, ErrorSecuencia) as e:   # ValueError: IP, puerto o robots.json mal puestos
+        print("Error: {}".format(e), file=sys.stderr)
+        sys.exit(2 if isinstance(e, ValueError) else 1)
+    # Cualquier otra excepcion es un fallo del programa: Python imprime el traceback y sale con codigo 1
 
 
 if __name__ == "__main__":
