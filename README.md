@@ -32,12 +32,15 @@ Entrega y fecha: no constan.
 Entorno (Python 3.7.5, URSim, puertos): [docs/entorno.md](../../docs/entorno.md). Desde la raíz del repo, en PowerShell 5.1:
 
 ```powershell
-python -u 2_practicas\Practica1_visualizador_UR3e\src\main.py primaria                   # URSim 1 por NAT: 127.0.0.1:30001
-python -u 2_practicas\Practica1_visualizador_UR3e\src\main.py primaria --ip 10.172.21.203  # un robot del laboratorio
-python -u 2_practicas\Practica1_visualizador_UR3e\src\main.py tiempo-real                # 127.0.0.1:30003
-python -u 2_practicas\Practica1_visualizador_UR3e\src\main.py varios                     # robots de src\robots.json
-python -u 2_practicas\Practica1_visualizador_UR3e\src\main.py ensenar --v 0.1 --a 0.2    # ¡ENVIA movej al robot!
+python -u 2_practicas\Practica1_visualizador_UR3e\src\main.py primaria                   # primer robot de src\robots.json, puerto 30001
+python -u 2_practicas\Practica1_visualizador_UR3e\src\main.py primaria --robot robot2    # otro robot del JSON, por nombre
+python -u 2_practicas\Practica1_visualizador_UR3e\src\main.py primaria --ip 10.172.21.203  # una IP suelta, sin mirar el JSON
+python -u 2_practicas\Practica1_visualizador_UR3e\src\main.py tiempo-real                # primer robot del JSON, puerto 30003
+python -u 2_practicas\Practica1_visualizador_UR3e\src\main.py varios                     # todos los robots de src\robots.json
+python -u 2_practicas\Practica1_visualizador_UR3e\src\main.py ensenar --v 0.1 --a 0.2    # ¡ENVIA movej al robot! (primer robot del JSON)
 ```
+
+La IP se cambia **solo en `src\robots.json`** (D22). Todas las órdenes aceptan `--config otro.json`.
 
 Parar con Ctrl+C. `ensenar` pide comandos en la consola: `g` guardar punto, `v` previsualizar, `e` ejecutar, `c` cancelar, `r` reanudar, `s`/`l [fichero]` guardar/cargar, `b` borrar, `q` salir. **Antes de `e`:** el robot encendido con frenos liberados (`robotMode = 7`) y, en URSim/PolyScope 5, *Ajustes → Sistema → Control remoto* en **Remoto**; velocidades bajas y zona despejada en un robot real. `movej` se niega a enviar más de 0,3 rad/s o 0,5 rad/s².
 
@@ -80,7 +83,9 @@ Comparación: [docs/desde-pi/comparacion-versiones-p1.md](../../docs/desde-pi/co
 
 **Limpieza por capas hecha (2026-10-15/16, D17–D21):** `src/` baja a 817 líneas (−31 %). Una sola clase `ClienteUR` para la primaria y la de tiempo real, que entrega los mensajes ya decodificados; una sola excepción de comunicación (`ErrorRed`); una sola función `visualizar`; sin «estado fresco»; robots colocados en fila por el simulador y `robots.json` solo con nombre e IP. Ver [arquitectura](docs/arquitectura.md) (módulos, flujo, errores, constantes). 122 pruebas, `humo_pybullet.py` y `humo_extremo_a_extremo.py` en verde con la ventana real y robots falsos (T10–T12 en [pruebas](docs/pruebas.md)); F22–F24 en [depuración](docs/depuración.md).
 
-**Siguiente:** (1) Josu termina de leer el código final (orden sugerido: `red.py` → `ur.py` → `simulador.py` → `secuencia.py` → `tareas.py` → `main.py`) y decide las dudas abiertas: ¿se quita `Secuencia` (lista con `guardar`/`cargar`) y se llevan sus ficheros a `_comando`?, ¿el parámetro `visualizador` de `Simulador`, que solo usan los tests?, ¿`cargar_robots` dentro de `main`?; (2) probar con URSim y después con el UR3e (avisar antes de enviar `movej`; `--v 0.1 --a 0.2`, zona despejada y primero solo lectura con `primaria`); (3) comprobar a ojo la ventana de PyBullet (postura y convenio de ángulos, apartado 9 del enunciado); (4) simplificar el parser de `main.py` (Josu: algo más sencillo, p. ej. con `input`); (5) HMI con pygame para la consola de `ensenar`; (6) opcional: trayectoria suave entre puntos, ver «Mejoras posibles» en [arquitectura](docs/arquitectura.md). `src/robots.json` lo edita Josu (IP de robots del laboratorio): `varios` sin `--config` se conectará a ellos.
+**Versión pre-final (2026-10-16, D22):** `primaria`, `tiempo-real` y `ensenar` cogen el robot de `src/robots.json` (el primero, o `--robot nombre`; `--ip` sigue valiendo y ignora el JSON): la IP se cambia solo ahí. 125 pruebas y `humo_extremo_a_extremo.py` en verde con robots falsos (T13 en [pruebas](docs/pruebas.md)). Esta es la base de la entrega: lo que falte son cambios pequeños tras probar con la VM de URSim y preparar la defensa.
+
+**Siguiente:** (1) Josu termina de leer el código final (orden sugerido: `red.py` → `ur.py` → `simulador.py` → `secuencia.py` → `tareas.py` → `main.py`) y decide las dudas abiertas: ¿se quita `Secuencia` (lista con `guardar`/`cargar`) y se llevan sus ficheros a `_comando`?, ¿el parámetro `visualizador` de `Simulador`, que solo usan los tests?, ¿`cargar_robots` dentro de `main`?; (2) probar con URSim y después con el UR3e (avisar antes de enviar `movej`; `--v 0.1 --a 0.2`, zona despejada y primero solo lectura con `primaria`); (3) comprobar a ojo la ventana de PyBullet (postura y convenio de ángulos, apartado 9 del enunciado); (4) simplificar el parser de `main.py` (Josu: algo más sencillo, p. ej. con `input`); (5) HMI con pygame para la consola de `ensenar`; (6) opcional: trayectoria suave entre puntos, ver «Mejoras posibles» en [arquitectura](docs/arquitectura.md). `src/robots.json` lo edita Josu (IP de la VM o de los robots del laboratorio): todas las órdenes sin `--ip` se conectan a ellos.
 
 ## Documentación de la práctica
 

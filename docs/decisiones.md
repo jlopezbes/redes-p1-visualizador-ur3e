@@ -200,3 +200,11 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Elegida:** (b). Si otra función necesita las posiciones, se pasan como argumento; el JSON solo sería el intermediario si una rama paralela las necesitara. Los campos sobrantes de un JSON antiguo se ignoran. En un PC, dos robots falsos se distinguen por IP de loopback (`127.0.0.1` y `127.0.0.2`) con el mismo puerto.
 - **Distinto:** no.
 - **Commit:** `ea88e21`, `ad37f9b`, `4a56083` (el `robots.json` de Josu)
+
+## D22 – `primaria`, `tiempo-real` y `ensenar` cogen el robot de `robots.json`; basta editar el JSON
+
+- **Contexto:** con la VM de URSim en el PC de Josu había que repetir la IP en cada comando (`--ip`), y por defecto era `127.0.0.1`. Un solo sitio donde cambiar la IP (y en la defensa, un cambio de robot = editar el JSON).
+- **Opciones:** (a) `--ip` obligatorio o por defecto en el código (antes); (b) sin argumentos, el primer robot del JSON; `--robot nombre` elige otro; `--ip` sigue como excepción y ignora el JSON; (c) además, un campo `puerto` opcional en el JSON.
+- **Elegida:** (b). Una función nueva, `tareas.ip_robot(ruta, nombre)`, y `--config` en las cuatro órdenes. `--robot` y `--ip` son excluyentes. `--puerto` sigue siendo el estándar de cada orden (30001 o 30003); (c) queda para si hiciera falta URSim 2 por NAT sin `--puerto`. El nombre del robot elegido es el que sale en las líneas de `visualizar`.
+- **Distinto:** sí, respecto a D21 (donde `--ip` y `--puerto` eran la vía para un solo robot).
+- **Commit:** pendiente.

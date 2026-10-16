@@ -62,7 +62,7 @@ def grados(q):
 def prueba_lectura(nombre, orden, formato):
     print(nombre)
     fake = RobotFalso(ayudas.puerto_libre(), formato).iniciar()
-    proceso, lineas = lanzar(orden, "--puerto", str(fake.puerto))
+    proceso, lineas = lanzar(orden, "--ip", "127.0.0.1", "--puerto", str(fake.puerto))
     time.sleep(5)
     terminar(proceso)
     fake.parar()
@@ -104,7 +104,7 @@ def prueba_ensenar():
         ruta = os.path.join(d, "puntos.json")
         with open(ruta, "w") as f:
             json.dump([destino], f)
-        proceso, lineas = lanzar("ensenar", "--puerto", str(fake.puerto), "--v", "0.3", "--a", "0.5")
+        proceso, lineas = lanzar("ensenar", "--ip", "127.0.0.1", "--puerto", str(fake.puerto), "--v", "0.3", "--a", "0.5")
 
         def escribir(texto, espera):
             proceso.stdin.write(texto + "\n")

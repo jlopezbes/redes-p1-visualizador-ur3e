@@ -6,6 +6,7 @@ Las cuatro tareas de la practica, como funciones que juntan los controladores:
 
     visualizar(clientes)                    uno o varios robots, un hilo por robot   -> aprobado (uno) y notable (varios)
     cargar_robots(ruta)                     los clientes de los robots de un JSON de IPs
+    ip_robot(ruta, nombre)                  (nombre, IP) de un robot del JSON, para las ordenes de un solo robot
     ensenar_reproducir(ip, puerto, v, a)    enseñar puntos y reproducirlos           -> sobresaliente
 
 PyBullet solo se toca desde el hilo que llama a estas funciones; los hilos de ur.HiloLectorUR solo leen sockets.
@@ -58,18 +59,32 @@ def visualizar(clientes):
         simulador.cerrar()
 
 
-def cargar_robots(ruta):
-    """JSON [{"nombre": "robot1", "ip": "10.172.18.74"}, ...] -> {nombre: ClienteUR} (primaria, puerto 30001).
+def _leer_robots(ruta, crear):
+    """JSON [{"nombre": "robot1", "ip": "10.172.18.74"}, ...] -> {nombre: crear(ip)}, en el orden del fichero.
     Lanza ValueError si no se puede leer o le falta algo."""
     try:
         with open(ruta, encoding="utf-8-sig") as f:         # utf-8-sig: tolera el BOM que anade el Bloc de notas
             robots = json.load(f)
-        clientes = {r["nombre"]: ur.ClienteUR(r["ip"]) for r in robots}
+        resultado = {r["nombre"]: crear(r["ip"]) for r in robots}
     except (OSError, ValueError, KeyError, TypeError) as e:     # fichero, JSON, campo que falta, IP mala
         raise ValueError("{}: {}: {}".format(ruta, type(e).__name__, e)) from e
-    if not clientes:
+    if not resultado:
         raise ValueError("{}: no hay ningun robot".format(ruta))
-    return clientes
+    return resultado
+
+
+def cargar_robots(ruta):
+    """Los robots del JSON como {nombre: ClienteUR} (primaria, puerto 30001)."""
+    return _leer_robots(ruta, ur.ClienteUR)
+
+
+def ip_robot(ruta, nombre=None):
+    """(nombre, ip) del robot `nombre` del JSON; sin nombre, el primero. ValueError si no existe."""
+    ips = _leer_robots(ruta, str)
+    nombre = nombre or next(iter(ips))
+    if nombre not in ips:
+        raise ValueError("{}: no hay ningun robot llamado {!r} (hay: {})".format(ruta, nombre, ", ".join(ips)))
+    return nombre, ips[nombre]
 
 
 # ---------- enseñar y reproducir ----------

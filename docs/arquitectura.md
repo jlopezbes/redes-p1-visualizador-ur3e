@@ -12,7 +12,7 @@ Versión final en `src/`: escrita por la IA a partir de `claude_2`, endurecida e
 | `src/red.py` | clases `ConexionTCP`, `ErrorRed`, `ErrorRedTimeout` | **Red pura**: conectar, desconectar, enviar y recibir por TCP con timeouts. No conoce el protocolo del UR. Valida IP y puerto y **traduce todo fallo de socket a `ErrorRed`** (D19). |
 | `src/simulador.py` | clases `Simulador`, `ErrorSimulador` | Envuelve `UR3eRG2` (PyBullet): robots por nombre, colocados en fila a 1 m (D21), `mover`, `previsualizar` y `cerrar`. Convierte los fallos de la librería en `ErrorSimulador`. |
 | `src/secuencia.py` | clases `Secuencia`, `Reproductor`, `ErrorSecuencia` | Enseñar y reproducir: `Secuencia` es una lista de puntos que se guarda y carga en JSON; `Reproductor` es la máquina de estados que envía un `movej` por punto y vigila errores. No deja escapar `ErrorRed`. |
-| `src/robots.json` | datos | Robots de `varios`: solo `nombre` e `ip` (D21). |
+| `src/robots.json` | datos | Los robots: solo `nombre` e `ip` (D21). `varios` usa todos; `primaria`, `tiempo-real` y `ensenar` el primero o el de `--robot` (D22). |
 
 ## Flujo de datos
 

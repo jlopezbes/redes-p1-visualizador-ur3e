@@ -49,6 +49,14 @@ class PruebasCargarRobots(unittest.TestCase):
             f.write(contenido)
         return ruta
 
+    def test_ip_robot_primero_por_defecto_o_por_nombre(self):
+        ruta = self.escribir(json.dumps([{"nombre": "z", "ip": "1.1.1.1"}, {"nombre": "a", "ip": "2.2.2.2"}]))
+        self.assertEqual(tareas.ip_robot(ruta), ("z", "1.1.1.1"))
+        self.assertEqual(tareas.ip_robot(ruta, "a"), ("a", "2.2.2.2"))
+        with self.assertRaises(ValueError) as e:
+            tareas.ip_robot(ruta, "b")
+        self.assertIn("z, a", str(e.exception))
+
     def test_el_robots_json_de_src_es_valido(self):
         # Solo que cargue y sea valido: las IP las cambia Josu segun los robots que use (no se fijan aqui).
         clientes = tareas.cargar_robots(os.path.join(CARPETA_SRC, "robots.json"))
@@ -214,13 +222,37 @@ class PruebasMain(unittest.TestCase):
         self.assertEqual(self.ejecutar(["primaria"], "visualizar", KeyboardInterrupt())[0], 0)
 
     def test_cada_orden_llama_a_la_tarea_con_el_cliente_que_toca(self):
-        with mock.patch.object(tareas, "visualizar") as visualizar, mock.patch.object(sys, "argv", ["main.py", "primaria"]):
+        with mock.patch.object(tareas, "visualizar") as visualizar, mock.patch.object(sys, "argv", ["main.py", "primaria", "--ip", "10.0.0.4"]):
             main.main()
             with mock.patch.object(sys, "argv", ["main.py", "tiempo-real", "--ip", "10.0.0.5"]):
                 main.main()
         primaria, tiempo_real = [c[0][0]["robot"] for c in visualizar.call_args_list]
-        self.assertEqual((primaria.destino, primaria.tiempo_real), ("127.0.0.1:30001", False))
+        self.assertEqual((primaria.destino, primaria.tiempo_real), ("10.0.0.4:30001", False))
         self.assertEqual((tiempo_real.destino, tiempo_real.tiempo_real), ("10.0.0.5:30003", True))
+
+    def test_sin_ip_el_robot_sale_del_json_el_primero_o_el_que_diga_robot(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = os.path.join(carpeta, "robots.json")
+            with open(ruta, "w") as f:
+                f.write(json.dumps([{"nombre": "uno", "ip": "10.0.0.1"}, {"nombre": "dos", "ip": "10.0.0.2"}]))
+            with mock.patch.object(tareas, "visualizar") as visualizar, \
+                    mock.patch.object(tareas, "ensenar_reproducir") as ensenar:
+                for argv in (["primaria"], ["tiempo-real", "--robot", "dos"], ["ensenar", "--robot", "dos"]):
+                    with mock.patch.object(sys, "argv", ["main.py"] + argv + ["--config", ruta]):
+                        main.main()
+            (nombre1, cliente1), = visualizar.call_args_list[0][0][0].items()
+            (nombre2, cliente2), = visualizar.call_args_list[1][0][0].items()
+            self.assertEqual((nombre1, cliente1.destino), ("uno", "10.0.0.1:30001"))
+            self.assertEqual((nombre2, cliente2.destino), ("dos", "10.0.0.2:30003"))
+            self.assertEqual(ensenar.call_args[0][:2], ("10.0.0.2", 30001))
+
+    def test_robot_que_no_esta_en_el_json_o_con_ip_a_la_vez_da_codigo_2(self):
+        for argv in (["primaria", "--robot", "no_existe"], ["primaria", "--robot", "a", "--ip", "10.0.0.1"]):
+            with self.subTest(argv):
+                with contextlib.redirect_stderr(io.StringIO()):
+                    codigo, _, sim = self.ejecutar(argv)
+                self.assertEqual(codigo, 2)
+                sim.assert_not_called()
 
 
 def simulador_falso(fallar_en=None, error=None):
