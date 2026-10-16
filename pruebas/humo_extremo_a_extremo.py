@@ -25,9 +25,17 @@ def comprobar(condicion, texto):
         FALLOS.append(texto)
 
 
-def lanzar(*argumentos):
-    """Arranca main.py y recoge su salida en una lista desde un hilo."""
-    proceso = subprocess.Popen([sys.executable, "-B", "-u", MAIN] + list(argumentos), stdin=subprocess.PIPE,
+def lanzar(*argumentos, puerto_primaria=None):
+    """Arranca main.py y recoge su salida en una lista desde un hilo. Con `puerto_primaria`, cambia ese puerto
+    en el proceso (el JSON de robots no lleva puertos: siempre usa el de la primaria)."""
+    if puerto_primaria is None:
+        comando = [sys.executable, "-B", "-u", MAIN] + list(argumentos)
+    else:
+        codigo = ("import sys; sys.path.insert(0, {src!r}); import ur; ur.PUERTO_PRIMARIA = {puerto}; "
+                  "import main; sys.argv = ['main.py'] + {args!r}; main.main()").format(
+                      src=os.path.dirname(os.path.abspath(MAIN)), puerto=puerto_primaria, args=list(argumentos))
+        comando = [sys.executable, "-B", "-u", "-c", codigo]
+    proceso = subprocess.Popen(comando, stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, bufsize=1)
     lineas = []
 
@@ -66,17 +74,17 @@ def prueba_lectura(nombre, orden, formato):
 
 
 def prueba_varios():
-    print("varios (2 robots, 2 puertos)")
-    f1 = RobotFalso(ayudas.puerto_libre()).iniciar()
-    f2 = RobotFalso(ayudas.puerto_libre(), q=[0.1, -1.0, 0.0, -1.0, 0.0, 0.0]).iniciar()
+    print("varios (2 robots con distinta IP de loopback y el mismo puerto)")
+    puerto = ayudas.puerto_libre()
+    f1 = RobotFalso(puerto).iniciar()
+    f2 = RobotFalso(puerto, q=[0.1, -1.0, 0.0, -1.0, 0.0, 0.0], ip="127.0.0.2").iniciar()
     import json
     import tempfile
     with tempfile.TemporaryDirectory() as d:
         ruta = os.path.join(d, "robots.json")
         with open(ruta, "w") as f:
-            json.dump([{"nombre": "r1", "ip": "127.0.0.1", "puerto": f1.puerto, "posicion": [0, 0, 0, 0, 0, 0]},
-                       {"nombre": "r2", "ip": "127.0.0.1", "puerto": f2.puerto, "posicion": [1, 0, 0, 0, 0, 0]}], f)
-        proceso, lineas = lanzar("varios", "--config", ruta)
+            json.dump([{"nombre": "r1", "ip": "127.0.0.1"}, {"nombre": "r2", "ip": "127.0.0.2"}], f)
+        proceso, lineas = lanzar("varios", "--config", ruta, puerto_primaria=puerto)
         time.sleep(5)
         terminar(proceso)
     f1.parar()

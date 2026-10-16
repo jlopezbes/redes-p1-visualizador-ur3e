@@ -204,6 +204,8 @@ class HiloLectorUR(threading.Thread):
         while not self._parar.is_set():
             try:
                 self.cliente.conectar()
+                if self._parar.is_set():                # detener() llego mientras se conectaba: su desconectar() no vio ningun socket
+                    break
                 for datos in self.cliente.mensajes():
                     if "q" in datos:
                         if self.q is None:

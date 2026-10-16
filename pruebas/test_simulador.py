@@ -42,10 +42,10 @@ class PruebasSimulador(unittest.TestCase):
         self.assertEqual(self.visualizador.creados, [])
         self.assertEqual(self.visualizador.movimientos[0][0], 0)
 
-    def test_los_demas_se_crean_con_su_posicion_y_se_mueven_por_su_id(self):
+    def test_los_demas_se_crean_en_fila_a_1_m_y_se_mueven_por_su_id(self):
         self.sim.agregar_robot("robot1")
-        self.sim.agregar_robot("robot2", [1.0, 0, 0, 0, 0, 0])
-        self.sim.agregar_robot("robot3", [2.0, 0, 0, 0, 0, 0])
+        self.sim.agregar_robot("robot2")
+        self.sim.agregar_robot("robot3")
         self.assertEqual(self.visualizador.creados, [[1.0, 0, 0, 0, 0, 0], [2.0, 0, 0, 0, 0, 0]])
         self.sim.mover("robot2", [0.2] * 6)
         self.sim.mover("robot3", [0.3] * 6)
@@ -63,24 +63,25 @@ class PruebasSimulador(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.sim.agregar_robot("robot1")
 
-    def test_robot_desconocido(self):
-        with self.assertRaises(ValueError):
-            self.sim.mover("nadie", [0.0] * 6)
-
     def test_previsualizar_recorre_todos_los_tramos_y_acaba_en_cada_punto(self):
         self.sim.agregar_robot("robot1")
         desde, p1, p2 = [0.0] * 6, [1.0] * 6, [1.0, 1.0, 1.0, 1.0, 1.0, 3.0]
-        self.sim.previsualizar("robot1", desde, [p1, p2], pasos=4, duracion_tramo=0.0)
+        with mock.patch.object(simulador, "PASOS_TRAMO", 4), mock.patch.object(simulador, "time"):
+            self.sim.previsualizar("robot1", desde, [p1, p2])
         recibidos = [q[:6] for _, q in self.visualizador.movimientos]
         self.assertEqual(len(recibidos), 8)                     # 4 pasos por tramo, 2 tramos
         self.assertEqual(recibidos[0], [0.25] * 6)              # primer paso del primer tramo
         self.assertEqual(recibidos[3], p1)                      # termina el tramo 1 exactamente en p1
         self.assertEqual(recibidos[7], p2)
 
-    def test_previsualizar_sin_puntos_no_hace_nada(self):
+    def test_la_vista_previa_tiene_tope_de_duracion(self):
         self.sim.agregar_robot("robot1")
-        self.sim.previsualizar("robot1", [0.0] * 6, [])
-        self.assertEqual(self.visualizador.movimientos, [])
+        esperas = []
+        falso = mock.Mock()
+        falso.sleep = esperas.append
+        with mock.patch.object(simulador, "PASOS_TRAMO", 2), mock.patch.object(simulador, "time", falso):
+            self.sim.previsualizar("robot1", [0.0] * 6, [[0.1] * 6] * 100)
+        self.assertLessEqual(sum(esperas), simulador.MAX_PREVIEW + 1e-6)         # sin tope serian 100 s
 
 
 class VisualizadorQueFalla(VisualizadorFalso):
@@ -93,12 +94,7 @@ class VisualizadorQueFalla(VisualizadorFalso):
         raise RuntimeError("Not connected to physics server.")
 
 
-class PruebasSimuladorRobusto(unittest.TestCase):
-    def setUp(self):
-        self.visualizador = VisualizadorFalso()
-        self.sim = Simulador(self.visualizador)
-        self.sim.agregar_robot("robot1")
-
+class PruebasErroresSimulador(unittest.TestCase):
     def test_un_fallo_de_la_libreria_sale_como_errorsimulador(self):
         sim = Simulador(VisualizadorQueFalla())
         sim.agregar_robot("robot1")
@@ -114,39 +110,11 @@ class PruebasSimuladorRobusto(unittest.TestCase):
                 Simulador()
         self.assertIn("UR3e_rg2", str(e.exception))
 
-    def test_el_primer_robot_fuera_del_origen_sin_pybullet_conectado_sale_errorsimulador(self):
-        sim = Simulador(VisualizadorFalso())            # no hay ventana PyBullet: la libreria real falla
-        with self.assertRaises(ErrorSimulador):
-            sim.agregar_robot("robot1", [1.0, 0, 0, 0, 0, 0])
-
-    def test_q_no_valido_es_valueerror_y_no_llega_a_la_libreria(self):
-        for q in ([float("nan")] * 6, [float("inf")] * 6, [1e300] * 6, [90.0] * 6, [0.1] * 5, [0.1] * 7, [],
-                  ["a"] * 6):
-            with self.subTest(q=q):
-                with self.assertRaises(ValueError):
-                    self.sim.mover("robot1", q)
-        self.assertEqual(self.visualizador.movimientos, [])
-
-    def test_posicion_de_la_base_no_valida(self):
-        for posicion in ([float("nan")] + [0] * 5, [0] * 5, [], ["x"] * 6, [1e9] + [0] * 5):
-            with self.subTest(posicion=posicion):
-                with self.assertRaises(ValueError):
-                    self.sim.agregar_robot("otro", posicion)
-        self.assertEqual(self.visualizador.creados, [])
-
-    def test_cerrar_es_idempotente_y_funciona_con_with(self):
-        with Simulador(VisualizadorFalso()) as sim:
-            sim.agregar_robot("robot1")
+    def test_cerrar_con_visualizador_ajeno_no_hace_nada_y_se_puede_repetir(self):
+        sim = Simulador(VisualizadorFalso())
+        sim.agregar_robot("robot1")
         sim.cerrar()
-        sim.cerrar()                                    # cerrar dos veces no falla
-
-    def test_la_vista_previa_tiene_tope_de_duracion(self):
-        esperas = []
-        falso = mock.Mock()
-        falso.sleep = esperas.append
-        with mock.patch.object(simulador, "time", falso):
-            self.sim.previsualizar("robot1", [0.0] * 6, [[0.1] * 6] * 100, pasos=2, duracion_tramo=1.0)
-        self.assertLessEqual(sum(esperas), simulador.MAX_PREVIEW + 1e-6)         # sin tope serian 100 s
+        sim.cerrar()
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 """
 UR falso para probar sin URSim ni robot: emite tramas con el formato real (las de ayudas.py), entiende
-movej(...) y stopj(...) y simula el movimiento. Solo escucha en 127.0.0.1. Ver el aviso de pruebas.md:
+movej(...) y stopj(...) y simula el movimiento. Solo escucha en loopback (127.0.0.1 por defecto). Ver el aviso de pruebas.md:
 es nuestra interpretacion del protocolo, no un robot.
 
     python -u 2_practicas\\Practica1_visualizador_UR3e\\pruebas\\robot_falso.py 31001                (primaria)
@@ -23,7 +23,8 @@ STOPJ = re.compile(r"stopj\(([\d.]+)\)")
 
 
 class RobotFalso:
-    def __init__(self, puerto, formato="primaria", q=None):
+    def __init__(self, puerto, formato="primaria", q=None, ip="127.0.0.1"):
+        self.ip = ip                                # siempre de loopback (127.x.x.x): 127.0.0.2 tambien es este PC
         self.puerto = puerto
         self.formato = formato                      # "primaria" o "tiempo_real"
         self.q = list(q or Q_INICIAL)               # rad
@@ -40,7 +41,7 @@ class RobotFalso:
     def iniciar(self):
         self._servidor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._servidor.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self._servidor.bind(("127.0.0.1", self.puerto))
+        self._servidor.bind((self.ip, self.puerto))
         self._servidor.listen(5)
         self._activo = True
         threading.Thread(target=self._aceptar, daemon=True).start()

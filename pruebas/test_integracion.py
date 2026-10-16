@@ -12,6 +12,7 @@ import unittest
 import ayudas
 import secuencia
 import ur
+from red import ErrorRed
 from robot_falso import Q_INICIAL, RobotFalso
 
 SEGUNDOS = 15.0         # tiempo maximo de cada espera
@@ -51,59 +52,69 @@ class Base(unittest.TestCase):
         self.assertTrue(self.esperar(lambda: len(self.ordenes(prefijo)) >= cantidad, 3),
                         "el robot falso no recibio {} x {}".format(cantidad, prefijo))
 
+    def conectar(self, **kw):
+        robot = ur.ClienteUR("127.0.0.1", kw.pop("puerto", self.fake.puerto), **kw)
+        self.addCleanup(robot.desconectar)
+        robot.conectar()
+        return robot
+
 
 class PruebasLectura(Base):
     def test_lee_el_estado_inicial(self):
-        with ur.UrPrimaria("127.0.0.1", self.fake.puerto) as robot:
-            self.assertTrue(casi_igual(next(robot.estados()), Q_INICIAL))
+        self.assertTrue(casi_igual(next(self.conectar().mensajes())["q"], Q_INICIAL))
 
     def test_movej_llega_al_punto(self):
         punto = con_offset(Q_INICIAL, 0, 0.3)
-        with ur.UrPrimaria("127.0.0.1", self.fake.puerto) as robot:
-            next(robot.estados())               # movej exige haber recibido antes un estado
-            robot.movej(punto, velocidad=0.3, aceleracion=0.5)
-            for q in robot.estados():
-                if casi_igual(q, punto):
-                    break
+        robot = self.conectar()
+        robot.movej(punto, velocidad=0.3, aceleracion=0.5)
+        for datos in robot.mensajes():
+            if casi_igual(datos["q"], punto):
+                break
         self.assertEqual(len(self.ordenes("movej(")), 1)
 
     def test_tiempo_real(self):
         fake = RobotFalso(ayudas.puerto_libre(), formato="tiempo_real").iniciar()
         self.addCleanup(fake.parar)
-        with ur.UrTiempoReal("127.0.0.1", fake.puerto) as robot:
-            self.assertTrue(casi_igual(next(robot.estados()), Q_INICIAL))
+        robot = self.conectar(puerto=fake.puerto, tiempo_real=True)
+        self.assertTrue(casi_igual(next(robot.mensajes())["q"], Q_INICIAL))
 
-    def test_lector_se_recupera_cuando_el_robot_corta(self):
+    def test_hilo_se_recupera_cuando_el_robot_corta(self):
         reintento = ur.REINTENTO
         ur.REINTENTO = 0.5
         self.addCleanup(setattr, ur, "REINTENTO", reintento)
-        lector = ur.LectorUR("falso", ur.UrPrimaria("127.0.0.1", self.fake.puerto))
-        self.addCleanup(lector.parar)
-        lector.start()
-        self.assertTrue(self.esperar(lambda: lector.ultimo_q() is not None))
+        hilo = ur.HiloLectorUR("falso", ur.ClienteUR("127.0.0.1", self.fake.puerto))
+        self.addCleanup(hilo.detener)
+        hilo.start()
+        self.assertTrue(self.esperar(lambda: hilo.q is not None))
         self.fake.cortar_clientes()
-        self.assertTrue(self.esperar(lambda: lector.ultimo_q() is None, 3), "no detecto la desconexion")
-        self.assertTrue(self.esperar(lambda: lector.ultimo_q() is not None, 5), "no reconecto")
-        self.assertTrue(casi_igual(lector.ultimo_q(), Q_INICIAL))
+        self.assertTrue(self.esperar(lambda: hilo.q is None, 3), "no detecto la desconexion")
+        self.assertTrue(self.esperar(lambda: hilo.q is not None, 5), "no reconecto")
+        self.assertTrue(casi_igual(hilo.q, Q_INICIAL))
+
+    def test_dos_robots_en_la_misma_maquina_con_distinta_ip(self):
+        # Como en "varios": el mismo puerto en dos robots distintos (127.0.0.2 tambien es este PC en Windows y Linux).
+        segundo = RobotFalso(self.fake.puerto, q=[0.1, -1.0, 0.0, -1.0, 0.0, 0.0], ip="127.0.0.2").iniciar()
+        self.addCleanup(segundo.parar)
+        robot2 = ur.ClienteUR("127.0.0.2", self.fake.puerto)
+        self.addCleanup(robot2.desconectar)
+        robot2.conectar()
+        self.assertTrue(casi_igual(next(robot2.mensajes())["q"], [0.1, -1.0, 0.0, -1.0, 0.0, 0.0]))
+        self.assertTrue(casi_igual(next(self.conectar().mensajes())["q"], Q_INICIAL))
 
 
 class PruebasReproductor(Base):
-    def preparar(self, *puntos, **kw):
-        self.robot = ur.UrPrimaria("127.0.0.1", self.fake.puerto)
-        self.seq = secuencia.Secuencia()
-        for p in puntos:
-            self.seq.agregar(p)
+    def preparar(self, *puntos):
+        self.robot = self.conectar()
+        self.seq = secuencia.Secuencia(puntos)
         self.rep = secuencia.Reproductor(self.robot, self.seq, velocidad=0.3, aceleracion=0.5)
         self.fases = set()
-        self.robot.conectar()
-        self.addCleanup(self.robot.cerrar)
         self.bombear(lambda: self.rep.q is not None)        # espera el primer estado
 
     def bombear(self, hasta, segundos=SEGUNDOS):
         """Procesa los mensajes del robot en el hilo de la prueba hasta que hasta() sea cierto."""
         fin = time.time() + segundos
-        for tipo, mensaje in self.robot.mensajes():
-            self.rep.procesar(tipo, mensaje)
+        for datos in self.robot.mensajes():
+            self.rep.procesar(datos)
             self.fases.add(self.rep.fase)
             if hasta():
                 return
@@ -162,7 +173,7 @@ class PruebasReproductor(Base):
         self.rep.ejecutar()
         self.bombear(lambda: self.rep.fase == secuencia.MOVIENDO)
         self.fake.cortar_clientes()
-        with self.assertRaises(ur.ErrorUR):
+        with self.assertRaises(ErrorRed):
             self.bombear(lambda: False)
         self.rep.conexion_perdida()
         self.assertEqual(self.rep.fase, secuencia.PARADA)
