@@ -207,4 +207,4 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Opciones:** (a) `--ip` obligatorio o por defecto en el código (antes); (b) sin argumentos, el primer robot del JSON; `--robot nombre` elige otro; `--ip` sigue como excepción y ignora el JSON; (c) además, un campo `puerto` opcional en el JSON.
 - **Elegida:** (b). Una función nueva, `tareas.ip_robot(ruta, nombre)`, y `--config` en las cuatro órdenes. `--robot` y `--ip` son excluyentes. `--puerto` sigue siendo el estándar de cada orden (30001 o 30003); (c) queda para si hiciera falta URSim 2 por NAT sin `--puerto`. El nombre del robot elegido es el que sale en las líneas de `visualizar`.
 - **Distinto:** sí, respecto a D21 (donde `--ip` y `--puerto` eran la vía para un solo robot).
-- **Commit:** pendiente.
+- **Commit:** `4f21b21`
