@@ -58,11 +58,6 @@ class ConexionTCP:
         if sock is not None:
             sock.close()
 
-    def _perdida(self, causa):
-        """La conexion ya no sirve: se cierra y se devuelve el ErrorRed que hay que lanzar."""
-        self.desconectar()
-        return ErrorRed("conexion con {} perdida o cerrada: {}".format(self.destino, causa))
-
     def enviar(self, datos):
         """Envia todos los bytes. Un fallo cierra la conexion (no se sabe cuanto salio).
         Ojo: si el otro lado ya cerro, el primer envio puede no fallar; fallara el siguiente o el recibir()."""
@@ -72,7 +67,8 @@ class ConexionTCP:
         try:
             sock.sendall(datos)
         except OSError as e:                            # incluye el timeout: tras un envio a medias el flujo no vale
-            raise self._perdida(e) from e
+            self.desconectar()
+            raise ErrorRed("conexion con {} perdida al enviar: {}".format(self.destino, e)) from e
 
     def recibir(self):
         """Devuelve los bytes que haya (hasta 65536). Espera como mucho TIMEOUT_LECTURA s (ErrorRedTimeout, sigue abierta).
@@ -86,7 +82,9 @@ class ConexionTCP:
             raise ErrorRedTimeout("{} no ha enviado nada en {} s (robot parado o puerto equivocado?)".format(
                 self.destino, TIMEOUT_LECTURA)) from None
         except OSError as e:
-            raise self._perdida(e) from e
+            self.desconectar()
+            raise ErrorRed("conexion con {} perdida al recibir: {}".format(self.destino, e)) from e
         if not datos:
-            raise self._perdida("el otro extremo ha cerrado")
+            self.desconectar()
+            raise ErrorRed("conexion con {} cerrada por el otro extremo (robot apagado o reiniciado?)".format(self.destino))
         return datos
