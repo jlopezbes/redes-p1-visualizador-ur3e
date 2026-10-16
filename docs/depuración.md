@@ -2,7 +2,48 @@
 
 El profesor valora sobre todo saber depurar: cada fallo real queda como caso. Numeración fija F1, F2… con el más reciente arriba.
 
-Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F6 es de la fase 1 de `src/`; F7–F10 son de la revisión de robustez de la capa 1 (`red.py`) y F11–F14 de la capa 2 (`ur.py`) F15–F19 de la capa 3 (`secuencia.py`, `simulador.py`) F20 de la capa 4 (`main.py`, `tareas.py`) y F21 de la ejecución real con ventana tras las cuatro capas. Cada uno dice qué se ejecutó y qué solo se leyó.
+Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F6 es de la fase 1 de `src/`; F7–F10 son de la revisión de robustez de la capa 1 (`red.py`) y F11–F14 de la capa 2 (`ur.py`) F15–F19 de la capa 3 (`secuencia.py`, `simulador.py`) F20 de la capa 4 (`main.py`, `tareas.py`) y F21 de la ejecución real con ventana tras las cuatro capas. **F22–F24 son de la limpieza por capas (2026-10-16).** Cada uno dice qué se ejecutó y qué solo se leyó.
+
+**Qué casos describen código que la limpieza (D17–D21) ya cambió.** Se conservan como historia y como lección; el fallo que explican ya no puede ocurrir o se evita de otra forma:
+
+| Caso | Hoy |
+|---|---|
+| F10 (timeouts) | los timeouts son constantes; ya no se validan |
+| F11, F12 (estado fresco) | desaparecieron `estado_fresco()` y `PLAZO_ESTADO` (D20); el hilo lector pone `q = None` cuando salta el timeout de lectura |
+| F13 (`q` raro, texto del robot) | ya no se valida el rango de `q` ni se sanea el texto; sigue el aviso del subpaquete de 251 B |
+| F14 (`stopj` y `enviar_script`) | `stopj` envía lo que recibe; `enviar_script` no existe; sigue lo de `parar()` y `puerto=0` |
+| F15 | `_parar_robot` ya no devuelve `True/False`: imprime «Robot detenido» o el aviso en mayúsculas; la lección sigue |
+| F16 | `reanudar` tras borrar es imposible: con la secuencia en `PARADA` la consola rechaza `b`, `l` y `g` |
+| F17 | la fase `ESPERANDO_ESTADO` se quitó (D20) |
+| F18, F19 | sin topes de fichero ni guardado atómico; el simulador no valida `q` ni posiciones |
+| F20 | `with Simulador()` → `try/finally`; el resto vale |
+| F21 | sigue valiendo (la consola se lee después de abrir la ventana) |
+
+## F24 – Las pruebas nuevas fallaban por cómo es Windows y por un cliente falso mal pensado, no por el código (2026-10-16, `pruebas/`)
+
+- **Síntoma:** tres fallos en la primera ejecución de las pruebas adaptadas: con un puerto cerrado el hilo seguía sin `ultimo_error` a los 0,4 s; `visualizar` con un robot caído no había escrito «DESCONECTADO» a los 1,6 s; y un test esperaba una sola línea de «DESCONECTADO» y salieron 8.
+- **Aislamiento:** ✅ ejecutado (`python -u -B -m unittest discover -s pruebas`). Las dos primeras: en Windows, `connect` a un puerto local donde nadie escucha tarda 1–2 s en fallar (se vio en la salida de otro test: el error llegaba mucho después). La tercera: el cliente falso devolvía un `q` antes de fallar; `HiloLectorUR` borra `ultimo_error` al recibir un `q`, así que el siguiente fallo es «nuevo» y se vuelve a escribir (el comportamiento correcto).
+- **Causa:** supuestos de tiempo de la prueba y un cliente falso que no representaba el caso (un robot que no contesta nunca).
+- **Arreglo:** esperar hasta 6 s a que aparezca el error; `visualizar` con un cliente falso que falla al instante y un reloj falso que simula el Ctrl+C a los 2 s (sin depender de la red ni de hilos huérfanos); un `ClienteQueFalla` que falla sin dar ningún `q`.
+- **Lección:** al probar «sin robot», no contar con que Windows rechace rápido; y un hilo que sigue vivo al acabar un test ensucia la salida del siguiente.
+- **Commit:** `7c6ec6d`
+
+## F23 – `detener()` tardaba 2 s si llegaba mientras el hilo estaba conectando (2026-10-16, `src/ur.py`)
+
+- **Síntoma:** `test_detener_cierra_el_socket_y_el_hilo_termina_enseguida` falló: `detener()` tardó 2,02 s en lugar de menos de 0,5 s, con el servidor aceptando y callando.
+- **Aislamiento:** ✅ ejecutado. La prueba espera a que el servidor acepte y llama a `detener()` enseguida; el hilo lector aún no había guardado el socket nuevo, así que el `desconectar()` de `detener()` no vio nada que cerrar. Es la carrera que la auditoría ya había resuelto (F14: «el hilo mira `_parar` justo después de conectar») y que yo quité en la primera pasada de la capa 3 por considerarla sobrante.
+- **Causa:** `conectar()` termina de abrir el socket después de que `detener()` ya haya mirado; el hilo entra en `recibir()` y espera hasta `TIMEOUT_LECTURA` (2 s).
+- **Arreglo:** tras `conectar()`, `if self._parar.is_set(): break` (3 líneas en `HiloLectorUR.run`; el `finally` cierra el socket). Las 122 pruebas pasaron después (una ejecución completa).
+- **Commit:** `7c6ec6d`
+- **Para la defensa:** al simplificar, la prueba de una carrera conocida es la que dice si lo quitado era sobrante o no.
+
+## F22 – Con `--puerto` de la otra interfaz, el programa conectaba y se quedaba mudo, sin error (2026-10-16, `src/ur.py`)
+
+- **Síntoma (razonado antes de arreglarlo, no ejecutado):** al quitar en la primera pasada de la capa 3 el chequeo de «llegan bytes pero ningún estado», `primaria --puerto 30003` conectaba bien y no daba ni datos ni error: el byte 4 de un paquete de tiempo real es el primero del reloj del robot (un `double`, siempre 0x40 o 0x41), nunca 16 ni 20, así que `_decodificar` lo ignoraba como «mensaje que no interesa». El inverso, `tiempo-real --puerto 30001`, suele fallar por «longitud imposible» (el primer mensaje, el de versión, mide menos de 300 B), pero si el primero fuera un estado se leerían articulaciones basura. Antes de la limpieza ambos casos daban `ErrorUR`.
+- **Causa:** la limpieza quitó dos protecciones (el plazo sin estados en `_paquetes` y `_q_valido`) sin cubrir el caso de un formato que no corresponde al puerto, que `--puerto` hace posible (se usa con URSim por NAT).
+- **Arreglo:** `ClienteUR.mensajes()` cuenta los paquetes seguidos sin dato útil y lanza `ErrorRed(«llegan datos pero ninguno es un estado (puerto o interfaz equivocados? primaria = 30001, tiempo real = 30003)»)` al pasar `MAX_IGNORADOS` = 100 (4 líneas, sin relojes). Prueba: `test_puerto_equivocado_primaria_contra_tiempo_real_avisa` (✅ pasa con el arreglo; no se ejecutó antes sin él). No cubre la basura que pase por casualidad en el sentido inverso.
+- **Commit:** `ad37f9b`
+- **Para la defensa:** una simplificación puede quitar justo la protección que detectaba un error de uso; antes de quitar una comprobación hay que preguntarse qué fallo del usuario la hacía falta.
 
 ## F21 – `ensenar` se quedaba mudo: el hilo de consola bloqueaba la apertura de la ventana de PyBullet (2026-10-14, `src/tareas.py`)
 

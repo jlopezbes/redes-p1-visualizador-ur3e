@@ -6,7 +6,7 @@ Todos los comandos, desde la raíz del repo, en PowerShell 5.1 con Python 3.7.5.
 
 **Cambio de ruta (2026-10-14):** `practicas\` pasó a `2_practicas\` después de ejecutar T1 a T4 con la ruta vieja. Los comandos de abajo llevan ya la ruta nueva; tras el cambio solo se repitió T1 (`python -B -m unittest discover -s 2_practicas\Practica1_visualizador_UR3e\pruebas`: 84 pruebas OK en 12,7 s). T3, T4 y el resto no se repitieron con la ruta nueva (solo cambia el nombre de la carpeta; ningún script la lleva escrita en el código).
 
-## Versión final `src/` (fase 1, 2026-10-14)
+## Versión final `src/` (fase 1, 2026-10-14; limpieza por capas, 2026-10-16)
 
 **Aviso general:** las tramas de las pruebas las construyen `pruebas/ayudas.py` y `pruebas/robot_falso.py` a partir del formato descrito en [docs/ur-referencia.md](../../../docs/ur-referencia.md) y en `claude_2`. Si un robot real mandara otra cosa, estas pruebas no lo detectarían. Por eso las que dependen de ellas llevan ⚠️ y no ✅.
 
@@ -22,12 +22,21 @@ Todos los comandos, desde la raíz del repo, en PowerShell 5.1 con Python 3.7.5.
 | T8 | Revisión de robustez, capa 4 (`main.py`, `tareas.py`): `main()` con argumentos y `robots.json` malos (código 2, sin crear el simulador), errores de capa (1) y Ctrl+C (0); `ensenar_reproducir` contra el robot falso con la ventana (falsa) cerrada en pleno movimiento (llega `stopj`), EOF, `q` con el robot caído; `b/l/g` con la secuencia parada. `test_tareas`: 13 → 22 | `python -B -m unittest discover -s 2_practicas\Practica1_visualizador_UR3e\pruebas` | 149 pruebas OK en ≈ 19 s (tres ejecuciones seguidas; robot falso en `127.0.0.1`, simulador falso: sin ventana, sin robots reales ni URSim; `robots.json` real solo se parsea en `test_el_robots_json_de_src_es_valido`) | ⚠️ | 2026-10-14 |
 | T9 | Tras C1–C4, `main.py` entero con la ventana REAL de PyBullet y robots falsos propios (primaria, tiempo real, varios, `ensenar` con g, l, v, e, q, y `--v 0.5` rechazado). Aquí apareció F21: `ensenar` se quedaba mudo. Además, con la ventana real, `q` cierra la ventana (`btShutDownExampleBrowser ... Thread TERMINATED`: `Simulador.cerrar()` verificado) | `python -u 2_practicas\Practica1_visualizador_UR3e\pruebas\humo_extremo_a_extremo.py` y `python -B -m unittest discover -s 2_practicas\Practica1_visualizador_UR3e\pruebas` | Antes del arreglo: 6 FALLOS en `ensenar`. Después: `TODO OK` y 149 pruebas OK en ≈ 19 s. Sin robots reales ni URSim | ✅ | 2026-10-14 |
 
-Qué cubre T1 en lo que más importa (cada punto con su prueba en `pruebas/`):
+**Las filas T1–T9 son del código anterior a la limpieza** (D17–D21): los nombres (`UrPrimaria`, `LectorUR`, `ErrorUR`, `estado_fresco`…) y los números de pruebas ya no valen; los resultados vigentes son los de T10–T12. T3 también usaba la opción `desplazado`, que ya no existe.
 
-- Decodificación con mensajes troceados (byte a byte), longitudes imposibles y desalineación → `test_ur.py`.
+| Id | Qué se prueba | Comando | Resultado | Estado | Fecha |
+|---|---|---|---|---|---|
+| T10 | Pruebas automáticas tras la limpieza por capas: `red` (12), `ur` (35), `simulador` (9), `secuencia` (28), `tareas` y `main` (28) e integración con el robot falso (10). Cubren: corte y decodificación de paquetes (primaria y tiempo real), `movej` con límites, aviso de puerto equivocado (100 paquetes sin estado), `HiloLectorUR` (reconexión, un solo aviso por motivo, `detener()` inmediato), `Reproductor` (camino feliz, protección, emergencia, `stopj` que no sale), ficheros de secuencia malos, comandos de la consola, `main()` con códigos 0/1/2, `visualizar` con 1 y 2 robots (primaria, tiempo real y uno caído) y `ensenar` contra el robot falso (guardar, ejecutar, terminar, ventana cerrada con el robot en movimiento, robot que se cae) | `python -u -B -m unittest discover -s pruebas` (desde `2_practicas\Practica1_visualizador_UR3e`) | 122 pruebas OK en ≈ 32 s. Robot falso en `127.0.0.1` (y `127.0.0.2`), simulador falso: sin ventana, sin robots reales ni URSim. Las dos primeras ejecuciones dieron 3 fallos que eran de las pruebas y de un caso real (F23, F24) | ⚠️ | 2026-10-16 |
+| T11 | `Simulador` con la librería **real** `UR3e_rg2`: ids de PyBullet, articulaciones, posición de las bases | `python -u -B 2_practicas\Practica1_visualizador_UR3e\pruebas\humo_pybullet.py` | OK: robot1 → id 0 y robot2 → id 2; articulaciones leídas con `pybullet.getJointState` iguales a las enviadas (p. ej. `[0.3, -1.0, 0.5, -1.2, 0.4, 0.1]` rad); base x = 0,00 m y 1,00 m (robots colocados en fila por `agregar_robot`). Abre la ventana ≈ 2 s y `Simulador.cerrar()` la cierra | ✅ | 2026-10-16 |
+| T12 | `main.py` entero (`primaria`, `tiempo-real`, `varios`, `ensenar`) como subproceso con la ventana real de PyBullet contra robots falsos en puertos libres; `varios` con dos robots en `127.0.0.1` y `127.0.0.2` y el mismo puerto | `python -u 2_practicas\Practica1_visualizador_UR3e\pruebas\humo_extremo_a_extremo.py` | `TODO OK` (15 comprobaciones): imprime `q (grados): [0.0, -90.0, 0.0, -90.0, 0.0, 0.0]` en primaria y tiempo real; los 2 robots de `varios` imprimen su `q`; en `ensenar` funcionan `g`, `l`, `v` y `e` (1 `movej` con `a=0.5, v=0.3`, llega a q[0] = 0,200 rad) y `ensenar --v 0.5` sale con código 2. Abre la ventana ≈ 5 s cuatro veces. Robots falsos: no es URSim ni un UR3e | ⚠️ | 2026-10-16 |
+
+Qué cubre T10 en lo que más importa (cada punto con su prueba en `pruebas/`):
+
+- Corte de paquetes con mensajes troceados (byte a byte), longitudes imposibles y desalineación; decodificación de estado y errores → `test_ur.py`.
 - `movej` se niega a enviar ángulos en grados, 5 ángulos, velocidades > 0,3 rad/s o aceleraciones > 0,5 rad/s², y no envía nada → `test_ur.py`.
 - Máquina de estados: camino feliz, parada de protección y reanudar, error del robot, orden no aceptada, cancelar, conexión perdida → `test_secuencia.py` (reloj controlado) y `test_integracion.py` (contra el robot falso, con movimiento real).
-- Reconexión del `LectorUR` cuando el robot corta → `test_ur.py` y `test_integracion.py`.
+- Reconexión de `HiloLectorUR` cuando el robot corta → `test_ur.py` y `test_integracion.py`.
+- Las tareas de la práctica de principio a fin (con simulador falso) → `test_tareas.py`.
 
 Para lanzar el robot falso a mano y probar `main.py` sin URSim (**no usar los puertos 30001–30013 con URSim abierto**):
 
@@ -59,7 +68,7 @@ Lo que **no** demuestran V1 y V2: el robot falso no es URSim ni un robot real, a
 - **`src/` contra URSim o un UR3e real.** Es lo siguiente. Antes de enviar `movej` a URSim hay que avisar a Josu; en un robot real, `--v 0.1 --a 0.2`, zona despejada y primero solo lectura (`primaria`).
 - **Lo que se ve en la ventana.** T3 y T4 comprueban los ángulos por la API de PyBullet, no a ojo: la postura reconocible y el convenio de ángulos del enunciado (apartado 9) los tiene que mirar Josu.
 - **Formatos del protocolo con un robot:** los 251 B del subpaquete 1, los offsets de los mensajes tipo 20 (subtipos 6 y 10) y el offset 252 del tiempo real salen del PDF a través de `claude_2` y no están verificados.
-- **Carga del tiempo real:** el robot falso emite a 10 Hz; un robot real manda ≈ 500 paquetes/s al `LectorUR`.
+- **Carga del tiempo real:** el robot falso emite a 10 Hz; un robot real manda ≈ 500 paquetes/s al `HiloLectorUR`.
 - **`isProgramRunning` en URSim:** el `Reproductor` supone que sube a `True` mientras dura el `movej`. Si URSim no lo hiciera, a los 2 s daría la orden por rechazada salvo que el robot ya hubiera llegado.
 - **Previsualización con un robot real:** `previsualizar` bloquea el hilo principal (ver [arquitectura](arquitectura.md), limitaciones).
 - **Versiones archivadas:** cualquiera contra URSim o un robot real (`claude_1` tiene pruebas con 2 URSim del 2026-10-08 en su `docs/05_pruebas_y_resultados.md`, que aquí no se han repetido); de `claude_2`, `tiempo_real.py`, `varios_robots.py` y `ensenar_reproducir.py`; de `claude_1`, los ejercicios 2 a 5, el gemelo 3D, `--metodo rtde` y `--arrancar`.

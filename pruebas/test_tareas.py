@@ -293,7 +293,6 @@ class PruebasTareasConRobotFalso(unittest.TestCase):
     def test_visualizar_primaria_mueve_el_robot_y_cierra_el_simulador(self):
         sim = self.visualizar_hasta_ctrl_c({"robot": ur.ClienteUR("127.0.0.1", self.fake.puerto)}, 5)
         self.assertEqual((sim.robots, sim.movidos, sim.cerrado), (["robot"], {"robot"}, True))
-        self.assertIn("estados/s", self.salida.getvalue() + "estados/s")     # (la linea por segundo no da tiempo en 5 llamadas)
 
     def test_visualizar_tiempo_real(self):
         fake = RobotFalso(ayudas.puerto_libre(), formato="tiempo_real").iniciar()

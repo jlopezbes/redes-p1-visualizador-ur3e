@@ -2,7 +2,7 @@
 
 Numeración fija: D1, D2… (nunca se renumera). Cada una lleva contexto, opciones, la elegida y por qué, y la marca **«distinto»** si se aparta de lo que pide el enunciado o de lo que haría la clase: esas son la materia prima de la memoria.
 
-D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14. D6–D9 son de esa misma sesión (fase 1: código escrito por la IA, pendiente de revisión de Josu). D10–D11 son de la revisión de robustez de la capa 1 (`red.py`) D12–D13 de la capa 2 (`ur.py`) D14–D15 de la capa 3 (`secuencia.py`, `simulador.py`) y D16 de la capa 4 (`main.py`, `tareas.py`).
+D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14. D6–D9 son de esa misma sesión (fase 1: código escrito por la IA, pendiente de revisión de Josu). D10–D11 son de la revisión de robustez de la capa 1 (`red.py`) D12–D13 de la capa 2 (`ur.py`) D14–D15 de la capa 3 (`secuencia.py`, `simulador.py`) y D16 de la capa 4 (`main.py`, `tareas.py`). **D17–D21 son de la limpieza por capas (2026-10-15/16)**, que simplificó parte de lo anterior: las decisiones afectadas llevan una línea **«Hoy»** que dice qué sigue valiendo. El texto original se conserva como historia.
 
 ## D1 – Un solo módulo de protocolo, reutilizado por todos los scripts
 
@@ -26,6 +26,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Opciones:** (a) cada hilo llama a `move_robot`; (b) cada hilo guarda su último estado (con `Lock`) y el hilo principal lo dibuja.
 - **Elegida:** (b), clase `LectorUR`. **Porque** Claude 1 lo adoptó con el argumento de que PyBullet no es seguro entre hilos (afirmación de su documentación, no comprobada aquí), y además los `print` quedan ordenados. `ultimo_q()` devuelve una copia (prueba) para que quien lo llama no modifique el estado guardado.
 - **Distinto:** no.
+- **Hoy (D17, D18):** la clase se llama `HiloLectorUR`, sin `Lock` (un solo hilo escribe) y `ultimo_q()` es el atributo `q`.
 - **Commit:** `fe2a2de`, `800dd7d`
 
 ## D4 – Una dirección `ip`+`puerto` por robot, en un `robots.json`
@@ -34,6 +35,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Opciones:** (a) IPs y puertos fijos en el código; (b) `robots.json` con nombre, IP, puerto y posición de la base (Claude 2); (c) `ip[:puerto]` en la línea de comandos (Claude 1).
 - **Elegida:** (b) para `varios`, y `--ip`/`--puerto` para un solo robot. **Porque** cambiar de robot no obliga a tocar el código, y en la defensa piden cambiar IP o puerto en caliente.
 - **Distinto:** no.
+- **Hoy (D21):** el JSON lleva solo `nombre` e `ip`; el puerto es el del protocolo y la posición de cada base la decide el simulador. `--ip` y `--puerto` siguen para un solo robot.
 - **Commit:** `800dd7d`
 
 ## D5 – Un robot falso con tramas reales para probar sin hardware
@@ -50,6 +52,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Opciones:** (a) usar `UR3eRG2` directamente en cada tarea (como `claude_2`); (b) una clase fina que esconda sus detalles.
 - **Elegida:** (b), `simulador.py` (≈ 40 líneas). **Porque** la librería no esconde cuatro cosas, y en `claude_2` cada script las resolvía por su cuenta: (1) el primer robot ya existe con id 0 y los demás se crean con `spawn_robot` (en la prueba, el segundo recibió el id 2: el suelo ocupa el 1); (2) `move_robot` alarga en sitio la lista que recibe (`joint_values += ...`), así que hay que pasarle una copia; (3) colocar la base del primer robot exige llamar a `pybullet` directamente; (4) la interpolación de la previsualización estaba en el script de enseñar. Se comprobó con la librería real (`pruebas/humo_pybullet.py`).
 - **Distinto:** no (es lo que pidió Josu), pero con un matiz: `Simulador` acepta un visualizador falso en el constructor para poder probarla sin ventana.
+- **Hoy (D21):** `agregar_robot(nombre)` ya no recibe la posición: coloca los robots en fila a 1 m. Ya no hay colocación del primer robot con `pybullet` (3.) ni `with`: se usa `try/finally` y `cerrar()` (D17).
 - **Commit:** `2f0f5f5`
 
 ## D7 – Velocidad y aceleración por defecto bajas y límites que no se pueden saltar
@@ -66,6 +69,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Opciones:** (a) tres módulos tal cual; (b) añadir `secuencia.py` y una clase base `ClienteUR`.
 - **Elegida:** (b). **Porque** la máquina de estados de enseñar y reproducir (≈ 100 líneas con estado propio) no cabe como «función» sin volverse ilegible, y las dos interfaces del UR (30001 y 30003) comparten la conexión y el buffer y solo se diferencian en cómo cortan un paquete. `secuencia.py` no abre sockets ni ventanas: recibe el robot y los mensajes.
 - **Distinto:** sí, respecto al reparto que pidió Josu: dos piezas más (`ClienteUR` y `secuencia.py`). Para revisar.
+- **Hoy (D18):** `ClienteUR` es una clase única para las dos interfaces (ya no hay base ni subclases `UrPrimaria`/`UrTiempoReal`) y decodifica los mensajes antes de entregarlos.
 - **Commit:** `fe2a2de`, `e89e1da`, `800dd7d`
 
 ## D9 – Un robot es «varios robots con uno»
@@ -74,6 +78,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Opciones:** (a) un bucle por tarea; (b) una sola mecánica (`LectorUR` + `_dibujar`) para `primaria`, `tiempo-real` y `varios`.
 - **Elegida:** (b). **Porque** hay un solo bucle de dibujo y de reconexión que depurar. Coste: con un solo robot también se usa un hilo, y las líneas de información salen una vez por segundo (`[robot] 10 estados/s | q (grados): ...`) en lugar de en cada mensaje.
 - **Distinto:** no.
+- **Hoy (D17):** una sola función `visualizar(clientes)`; `main.py` crea el cliente que toca y se lo pasa. El bucle `_dibujar` está dentro de ella.
 - **Commit:** `800dd7d`
 
 ## D10 – Una clase de excepción por módulo: `ErrorRed`, `ErrorUR`, `ErrorSecuencia` y `ErrorSimulador`
@@ -92,6 +97,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
   `ValueError`/`TypeError` quedan para argumentos mal puestos (IP, puerto, timeouts, velocidad, un `q` con `nan`...): son errores de configuración o de programación, y `main.py` los valida antes de crear nada (capa 4). **Un solo `except Exception` fuera de `main` y del bucle de un hilo:** `Simulador._libreria()`, acotado a la llamada a PyBullet/`UR3eRG2` (código de terceros sin una jerarquía de errores útil: `pybullet.error`, `SystemError`, `ImportError`...), que siempre convierte en `ErrorSimulador ... from e`.
   **Porque** con (b) cualquier `OSError` ajeno (p. ej. al guardar un fichero) seguiría pareciendo «un fallo de conexión». Los mensajes de cada capa añaden una frase corta y encadenan la causa, sin repetirse en cascada. Toda conexión perdida cierra el socket, de modo que `abierta` es fiable.
 - **Distinto:** no (el enunciado no dice nada).
+- **Hoy (D19):** `ErrorUR` desapareció: `ErrorRed` es la única excepción de comunicación y `ur.py` la deja pasar. Siguen `ErrorRedTimeout`, `ErrorSecuencia` y `ErrorSimulador`. `main.py` ya no captura `ErrorSecuencia` (la captura `_comando`).
 - **Commit:** `e639b91` (`ErrorRed`), `0cac920` (`ErrorUR`), `0cff77d` (`ErrorSecuencia`, `ErrorSimulador`)
 
 ## D11 – `ConexionTCP` valida sus argumentos y solo acepta IPs, no nombres
@@ -100,6 +106,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Opciones:** (a) validar fuera, en `main.py` y en `cargar_robots`; (b) validar en `ConexionTCP.__init__`, el único punto por el que pasan todos; (c) además, permitir nombres de host.
 - **Elegida:** (b) sin (c): `ip` es una IP literal (`ipaddress.ip_address`), `puerto` un entero entre 1 y 65535 y los timeouts números con `0 < t <= 3600` s; si no, `ValueError` en español al crear el objeto. **Porque** hay una sola comprobación y los robots del laboratorio se dan por IP. Coste: `--ip localhost` ya no vale, hay que escribir `127.0.0.1`.
 - **Distinto:** no.
+- **Hoy (D17):** se valida la IP (solo literal) y el puerto (1–65535). Ya no se validan los timeouts: son las constantes `TIMEOUT_CONEXION` y `TIMEOUT_LECTURA`.
 - **Commit:** `e639b91`
 
 ## D12 – Un solo reloj para «datos actuales»: `estado_fresco()` y `PLAZO_ESTADO`
@@ -108,6 +115,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Opciones:** (a) un plazo para la lectura y otro para el movimiento; (b) una sola función `ClienteUR.estado_fresco()` («llegó un estado válido hace menos de `PLAZO_ESTADO` s», con `time.monotonic()`) que usan `ultimo_q()` y `movej`.
 - **Elegida:** (b), con `PLAZO_ESTADO = 2,0 s` (igual que `timeout_lectura`; un UR manda 125 estados/s por la interfaz primaria). `movej` lanza `ErrorUR` y no envía nada si no hay estado fresco; `stopj` **nunca** lo exige (frenar siempre se intenta) y con un valor inválido frena con `ACELERACION_MAX`. En los tests se reduce la constante en lugar de esperar. **Porque** dos relojes podrían discrepar y la regla es «ante la duda, no mover y avisar». Un `ErrorUR` (también por falta de estados) hace que el cliente se cierre y se reconecte.
 - **Distinto:** sí, respecto a `claude_2` (que enviaba `movej` sin comprobarlo): es más estricto.
+- **Hoy: SUSTITUIDA por D20.** `estado_fresco()` y `PLAZO_ESTADO` ya no existen. Se conserva que `stopj` nunca depende de nada y que `movej` se niega ante argumentos fuera de límites.
 - **Commit:** `0cac920`
 
 ## D13 – Formato inesperado del robot: `ErrorUR` una vez por conexión, no adivinar
@@ -116,6 +124,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Opciones:** (a) tolerar tamaños mayores y avisar; (b) lanzar `ErrorUR` con el tamaño recibido, el esperado y la constante que hay que tocar (`TAM_SUB_JOINTS`).
 - **Elegida:** (b). **Porque** un `q` decodificado con desplazamientos equivocados es finito y creíble, y la regla es no mover con datos dudosos: sin estados válidos no hay `movej` (D12). El motivo se escribe una sola vez (no en cada reintento de `LectorUR`). Igual de estrictos son los límites de lectura de `q` (±(2π + 0,2) rad, con margen por si el robot está en el tope de una articulación) frente a los de envío (±2π). El nivel (`reportLevel`) de los mensajes de error **no se mira**: cualquier error o excepción del robot detiene la secuencia (limitación documentada en [arquitectura](arquitectura.md)).
 - **Distinto:** no.
+- **Hoy (D17, D19):** sigue valiendo lo del tamaño de 251 B (ahora `ErrorRed`, en `ClienteUR._leer_estado`). Ya no se valida el rango de `q` al leer ni se sanea el texto de los errores del robot (`MAX_TEXTO_ERROR` desapareció).
 - **Commit:** `0cac920`
 
 ## D14 – El `Reproductor` espera un estado reciente, solo la protección y la emergencia bloquean, y si no puede frenar lo grita
@@ -124,6 +133,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Opciones:** (a) subir `PLAZO_ESTADO` o saltarse la comprobación tras una vista previa; (b) una fase `ESPERANDO_ESTADO` con tope (`ESPERA_ESTADO` = 3 s) que envía el primer `movej` cuando llega un estado reciente; para bloquear: (c) `protegido` y `emergencia`, o (d) también el modo del robot (`robotMode` distinto de 7).
 - **Elegidas:** (b) y (c). **Porque** (a) quitaría la seguridad de D12 justo donde hace falta; y (d) se descarta porque la decodificación de esos campos no está verificada con un robot real y no se debe inutilizar el programa por una suposición: el modo se guarda y se muestra en un mensaje, pero no bloquea. Si no se puede enviar el `stopj` se escribe una vez, en mayúsculas, que el robot puede seguir moviéndose y que hay que pararlo con el botón del pendant; `cancelar` deja siempre el `Reproductor` libre y nunca se escribe «detenido» sin haber enviado la parada. Un `ErrorUR` del `Reproductor` no sale: pasa a fallo con parada.
 - **Distinto:** sí, respecto a `claude_2` (no esperaba ni comprobaba nada).
+- **Hoy (D20):** la fase `ESPERANDO_ESTADO` y `ESPERA_ESTADO` se quitaron. Siguen valiendo (c) —solo bloquean `protegido` y `emergencia`— y el aviso en mayúsculas si el `stopj` no sale (`_parar_robot` ya no devuelve un booleano: avisa de ambas cosas).
 - **Commit:** `0cff77d`
 
 ## D15 – Ficheros de secuencia con tope y guardado atómico; el simulador valida en su frontera
@@ -132,6 +142,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Opciones:** (a) validar en `tareas.py`; (b) validar dentro de `Secuencia.cargar` y `Simulador` y escribir con un temporal.
 - **Elegida:** (b). Topes: 1 MB y 1000 puntos por fichero, cada punto una lista de 6 números en ±2π; `guardar` escribe en `ruta.tmp` y `os.replace`. El simulador acepta `q` en ±(2π + 0,2) rad (el mismo `LIMITE_Q_LECTURA` de `ur.py`) y una base en ±100 m/rad, y limita la vista previa a `MAX_PREVIEW` = 20 s. **Porque** así la comprobación está en un solo sitio y las capas de arriba reciben un `ErrorSecuencia`/`ErrorSimulador` con el motivo en español, no un traceback.
 - **Distinto:** no.
+- **Hoy (D17, D21):** `cargar` ya no limita el tamaño ni el número de puntos y `guardar` escribe directamente (sin `.tmp`); `cargar` sigue exigiendo 6 ángulos en ±2π por punto. El simulador no valida `q` ni posiciones; conserva `MAX_PREVIEW`.
 - **Commit:** `0cff77d`
 
 ## D16 – Una sola salida de errores en `main()` y un solo `try/finally` en `ensenar_reproducir`
@@ -139,4 +150,53 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Contexto:** hasta la capa 3 los errores esperados llegaban a `main.py` como traceback (F20).
 - **Elegida:** primero se crean los clientes y después el `Simulador` dentro de `with`, así un argumento malo falla antes de abrir la ventana sin escribir más validadores. `main()` traduce a una línea `Error: ...` en stderr: `ValueError`/`OSError` (argumentos, `robots.json`) -> código **2**; `ErrorUR`/`ErrorSimulador`/`ErrorSecuencia` -> **1**; Ctrl+C -> **0** (es la forma normal de parar); un fallo inesperado -> traceback y **1** (último `except Exception` de la aplicación). `ensenar_reproducir` cierra el robot en un `finally`, tras frenarlo si se mueve, en cualquier salida (`q`, Ctrl+C, ventana cerrada, bug); en vez de `time.sleep`, la reconexión espera con `comandos.get(timeout=ur.REINTENTO)`, y un EOF de la consola equivale a `q`. Se rechazan `b`, `l` y `g` con la secuencia parada o en espera.
 - **Distinto:** no.
+- **Hoy (D17, D19):** el `Simulador` va en `try/finally` (sin `with`) y, al salir, el robot se frena **antes** de cerrar la ventana. `main()` captura `ValueError` (2), `ErrorRed` y `ErrorSimulador` (1) y Ctrl+C (0); ya no captura `OSError` ni hay `except Exception` final: un fallo inesperado lo muestra Python con su traceback y código 1.
 - **Commit:** `5150baf`
+
+## D17 – Limpieza por capas: lo que no aporta se quita y la seguridad con el robot se queda
+
+- **Contexto:** la auditoría de robustez subió `src/` de ≈ 545 a ≈ 800 líneas (más los tests y los docs) y Josu, que tiene que explicar cada línea en la defensa, lo veía excesivo. Pidió una limpieza de arriba (programa) a abajo (sockets), una capa cada vez, que él revisa antes de seguir. Cada capa fue una rama (`limpieza/1-main` … `limpieza/5-coherencia`, ya integradas en `main`).
+- **Criterios aplicados** (los dio Josu al revisar cada capa):
+  1. Una función auxiliar con 2 usos o menos se **inlina** (solo se dejan, marcadas «dudosa», las que un hilo necesita o las que duplicarían un bloque largo).
+  2. Una función que solo reenvía a otra cambiando argumentos sobra (`visualizar_primaria`, `visualizar_tiempo_real` y `visualizar_varios` → `visualizar`).
+  3. Una clase que solo envuelve un dato sobra (`UrPrimaria`/`UrTiempoReal` → `ClienteUR`). `Secuencia` se queda como lista con `guardar` y `cargar`.
+  4. Un dato que viene dado no se lee de un fichero (puertos del protocolo, posición de los robots: D21).
+  5. Un error se dice con un mensaje general y la causa probable y el programa cierra limpio: no se validan tipos de argumentos internos, `nan`, ni se añaden constantes o fases «por si acaso». Tampoco se duplica lo que Python ya hace (el traceback de una excepción inesperada).
+  6. Si un dato es solo un dato, es un atributo, no un método (`HiloLectorUR.q`); si deriva de otro, una propiedad (`Reproductor.ocupado`).
+  7. Los nombres explican lo que son (`LectorUR` → `HiloLectorUR`, `cerrar` → `desconectar`).
+- **Lo que se conserva a propósito, por seguridad con el robot físico:** los límites de velocidad y aceleración de `movej`, `es_punto_valido` (rechaza grados enviados por error), `stopj` siempre, el aviso en mayúsculas si no se pudo frenar, la parada por `protegido`/`emergencia`/error del robot, el tamaño de 251 B, el aviso de puerto equivocado (`MAX_IGNORADOS`) y el tope de la vista previa (`MAX_PREVIEW`).
+- **Resultado:** `src/` de 1176 a 817 líneas (−31 %, contando líneas en blanco y docstrings: `ur.py` 404 → 231, `secuencia.py` 275 → 185, `red.py` 115 → 90, `simulador.py` 107 → 77, `tareas.py` 194 → 167, `main.py` 81 → 67). Las pruebas pasaron de 149 a 122 (se quitaron las de lo que ya no existe y se añadieron otras).
+- **Distinto:** sí, respecto a la auditoría (D10–D16): es la poda que Josu había aplazado.
+- **Commit:** `e5ef55b` (capa 1), `5cdf084` y `ea88e21` (capa 2), `8dd4132` y `4a61cb8` (capa 3), `ad37f9b` y `1cbf228` (capa 4), `493e64b` y `7c6ec6d` (coherencia y tests)
+
+## D18 – `ClienteUR` es el portal entre la red y el robot: una clase, y lo que sube ya está decodificado
+
+- **Contexto:** `ClienteUR` solo conectaba y cortaba paquetes; `UrPrimaria` y `UrTiempoReal` aportaban solo cómo cortar y qué decodificar; `Reproductor` y `LectorUR` recibían bytes o tipos de mensaje y llamaban a funciones `leer_*` de `ur.py`.
+- **Opciones:** (a) mantener la herencia; (b) una clase con `tiempo_real=False/True` y la decodificación dentro como métodos privados.
+- **Elegida:** (b). **Porque** los dos paquetes empiezan por la longitud, así que cortar es lo mismo (solo cambia el mínimo) y lo único distinto es decodificar; y las capas de arriba no tienen por qué conocer bytes ni tipos de mensaje: `mensajes()` entrega diccionarios (`q`, `ejecutando`, `protegido`, `emergencia`, `modo`) o `{"error": texto}`. Desaparecen la base abstracta y las dos subclases. **Riesgo documentado:** en tiempo real no llegan `ejecutando`, `protegido`, `emergencia` ni errores, así que `ensenar` usa siempre la primaria; y un puerto que no corresponde al formato se detecta con `MAX_IGNORADOS` (F22).
+- **Distinto:** no.
+- **Commit:** `4a61cb8`
+
+## D19 – Una sola excepción de comunicación (`ErrorRed`) y las clases de error propias se quedan
+
+- **Contexto:** `ErrorUR` era la misma clase vacía que `ErrorRed`, y `ur.py` tenía tres conversiones de una a otra. Josu preguntó para qué valían las cuatro clases de error y, tras la explicación, decidió dejarlas: ayudan a entender el tipo de error.
+- **Opciones:** (a) una clase por módulo (D10); (b) excepciones de Python (`ConnectionError`, `TimeoutError`, `RuntimeError`); (c) una sola para la comunicación (`ErrorRed`, con `ErrorRedTimeout` para el timeout) más `ErrorSecuencia` y `ErrorSimulador`.
+- **Elegida:** (c). `ur.py` lanza `ErrorRed` también para los fallos de protocolo y `main`, `tareas` y `secuencia` la importan de `red`. **Porque** una clase que solo cambia de nombre no aporta, y las demás sí dicen qué falló. Los mensajes llevan la causa probable («robot apagado o IP de otra red?», «puerto equivocado?»).
+- **Distinto:** no.
+- **Commit:** `4a61cb8`, `ad37f9b`
+
+## D20 – Sin «estado fresco»: el timeout de lectura basta, y los límites de `movej` no dependen del último estado
+
+- **Contexto:** D12 y D14 añadieron `estado_fresco()` (plazo de 2 s), la fase `ESPERANDO_ESTADO` y una comprobación en `movej` y `guardar_punto`. Tras limpiar `_paquetes`, casi no aportaba: si el robot calla, `recibir` da `ErrorRedTimeout` a los 2 s y `HiloLectorUR` pone `q = None`; y `movej` lleva ángulos absolutos, así que el robot parte de donde esté.
+- **Opciones:** (a) conservarlo; (b) quitarlo y exponer `q` como atributo; (c) además, descartar lo acumulado en el socket tras una vista previa (`vaciar()`, ≈ 12 líneas).
+- **Elegida:** (b). Josu descartó (c): con el robot parado un dato viejo no importa, y mientras se mueve el bucle procesa los mensajes sin bloquearse. **Límite aceptado:** un `g` justo después de `v` puede guardar una posición vieja (ver [arquitectura](arquitectura.md)). Si `ejecutar` o `reanudar` se encuentran sin conexión, `movej` falla con `ErrorRed` y el `Reproductor` entra en `PARADA` con el motivo. Un mensaje del robot mal formado ya no se salta: provoca una reconexión (≈ 2 s).
+- **Distinto:** sí, respecto a D12 y D14.
+- **Commit:** `4a61cb8`, `ad37f9b`
+
+## D21 – Los robots simulados se colocan solos en fila y `robots.json` lleva solo nombre e IP
+
+- **Contexto:** `robots.json` tenía IP, puerto y posición de la base. Los puertos los fija el protocolo del UR y las posiciones en el simulador son siempre las mismas; leerlas obligaba a validarlas (`LIMITE_POSE`, `_seis_numeros`, `ORIGEN`, colocar el primer robot con `pybullet`).
+- **Opciones:** (a) dejar todo en el JSON; (b) JSON solo con `nombre` e `ip`, y `Simulador.agregar_robot(nombre)` pone el primer robot en el origen y cada siguiente 1 m más lejos en x.
+- **Elegida:** (b). Si otra función necesita las posiciones, se pasan como argumento; el JSON solo sería el intermediario si una rama paralela las necesitara. Los campos sobrantes de un JSON antiguo se ignoran. En un PC, dos robots falsos se distinguen por IP de loopback (`127.0.0.1` y `127.0.0.2`) con el mismo puerto.
+- **Distinto:** no.
+- **Commit:** `ea88e21`, `ad37f9b`, `4a56083` (el `robots.json` de Josu)

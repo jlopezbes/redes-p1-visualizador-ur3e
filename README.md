@@ -20,9 +20,9 @@ Entrega y fecha: no constan.
 
 | Requisito | Archivo | Estado |
 |---|---|---|
-| Un robot por interfaz primaria (30001) → PyBullet | `src/main.py primaria` → `tareas.visualizar_primaria` | ⚠️ robot falso, no URSim |
-| Un robot por interfaz de tiempo real (30003) → PyBullet | `src/main.py tiempo-real` → `tareas.visualizar_tiempo_real` | ⚠️ robot falso, no URSim |
-| Varios robots en la misma ventana (un hilo por robot) | `src/main.py varios` → `tareas.visualizar_varios` + `src/robots.json` | ⚠️ 2 robots falsos, no URSim |
+| Un robot por interfaz primaria (30001) → PyBullet | `src/main.py primaria` → `tareas.visualizar` con `ClienteUR` | ⚠️ robot falso, no URSim |
+| Un robot por interfaz de tiempo real (30003) → PyBullet | `src/main.py tiempo-real` → `tareas.visualizar` con `ClienteUR(tiempo_real=True)` | ⚠️ robot falso, no URSim |
+| Varios robots en la misma ventana (un hilo por robot) | `src/main.py varios` → `tareas.visualizar` + `src/robots.json` (nombre e IP) | ⚠️ 2 robots falsos, no URSim |
 | Enseñar, previsualizar y reproducir con `movej`; supervisar errores | `src/main.py ensenar` → `tareas.ensenar_reproducir` + `src/secuencia.py` | ⚠️ robot falso, no URSim |
 
 ⚠️ = probado con pruebas automáticas y con `main.py` entero contra un robot falso (ventana real de PyBullet); ❌ contra URSim o un UR3e. Detalle en [docs/pruebas.md](docs/pruebas.md).
@@ -44,7 +44,8 @@ Parar con Ctrl+C. `ensenar` pide comandos en la consola: `g` guardar punto, `v` 
 **Pruebas** (no necesitan robot ni URSim):
 
 ```powershell
-python -B -m unittest discover -s 2_practicas\Practica1_visualizador_UR3e\pruebas -v          # 149 pruebas, ≈ 19 s
+python -B -m unittest discover -s 2_practicas\Practica1_visualizador_UR3e\pruebas -v          # 122 pruebas, ≈ 32 s
+python -u 2_practicas\Practica1_visualizador_UR3e\pruebas\humo_pybullet.py                   # Simulador con la librería real (ventana ≈ 2 s)
 python -u 2_practicas\Practica1_visualizador_UR3e\pruebas\humo_extremo_a_extremo.py          # main.py entero con ventana real
 ```
 
@@ -73,11 +74,13 @@ Comparación: [docs/desde-pi/comparacion-versiones-p1.md](../../docs/desde-pi/co
 
 ## 5. Estado y siguiente paso
 
-**Fase 1 hecha (2026-10-14):** código escrito por la IA a partir de `claude_2`, en módulos (`red.py` → `ur.py` → `tareas.py` + `simulador.py` + `secuencia.py`; ver [arquitectura](docs/arquitectura.md)), y probado de extremo a extremo contra un robot falso.
+**Fase 1 hecha (2026-10-14):** código escrito por la IA a partir de `claude_2`, en módulos, y probado de extremo a extremo contra un robot falso.
 
-**Revisión de robustez hecha (2026-10-14, cuatro capas):** cada módulo tiene su excepción (`ErrorRed`, `ErrorUR`, `ErrorSecuencia`, `ErrorSimulador`), un q viejo no se presenta como actual, si el `stopj` no sale se avisa en mayúsculas, y `main.py` sale con códigos 0/1/2 (tabla en [arquitectura](docs/arquitectura.md)). 149 pruebas y el humo completo con la ventana real, todo contra robots falsos. Casos F7–F21 en [depuración](docs/depuración.md). El código creció de ≈ 545 a ≈ 800 líneas y Josu lo ve excesivo.
+**Revisión de robustez hecha (2026-10-14, cuatro capas):** excepciones propias, parada si el robot falla, códigos de salida 0/1/2. Casos F7–F21 en [depuración](docs/depuración.md). El código creció a 1176 líneas y Josu lo veía excesivo.
 
-**Siguiente:** (1) **poda** del código añadido por la auditoría, cuando Josu la pida (lista de candidatos en el informe C5 de la auditoría: ≈ 100–120 líneas de `src/` y ≈ 250 de tests); (2) Josu revisa el código y propone cambios (leer en este orden: `red.py` → `ur.py` → `simulador.py` → `secuencia.py` → `tareas.py` → `main.py`); (3) probar con URSim y después con el UR3e (avisar antes de enviar `movej`); (4) comprobar a ojo la ventana de PyBullet (postura y convenio de ángulos, apartado 9 del enunciado); (5) opcional: trayectoria suave entre puntos, ver «Mejoras posibles» en [arquitectura](docs/arquitectura.md). `src/robots.json` lo edita Josu (IP de robots del laboratorio): `varios` sin `--config` se conectará a ellos.
+**Limpieza por capas hecha (2026-10-15/16, D17–D21):** `src/` baja a 817 líneas (−31 %). Una sola clase `ClienteUR` para la primaria y la de tiempo real, que entrega los mensajes ya decodificados; una sola excepción de comunicación (`ErrorRed`); una sola función `visualizar`; sin «estado fresco»; robots colocados en fila por el simulador y `robots.json` solo con nombre e IP. Ver [arquitectura](docs/arquitectura.md) (módulos, flujo, errores, constantes). 122 pruebas, `humo_pybullet.py` y `humo_extremo_a_extremo.py` en verde con la ventana real y robots falsos (T10–T12 en [pruebas](docs/pruebas.md)); F22–F24 en [depuración](docs/depuración.md).
+
+**Siguiente:** (1) Josu termina de leer el código final (orden sugerido: `red.py` → `ur.py` → `simulador.py` → `secuencia.py` → `tareas.py` → `main.py`) y decide las dudas abiertas: ¿se quita `Secuencia` (lista con `guardar`/`cargar`) y se llevan sus ficheros a `_comando`?, ¿el parámetro `visualizador` de `Simulador`, que solo usan los tests?, ¿`cargar_robots` dentro de `main`?; (2) probar con URSim y después con el UR3e (avisar antes de enviar `movej`; `--v 0.1 --a 0.2`, zona despejada y primero solo lectura con `primaria`); (3) comprobar a ojo la ventana de PyBullet (postura y convenio de ángulos, apartado 9 del enunciado); (4) simplificar el parser de `main.py` (Josu: algo más sencillo, p. ej. con `input`); (5) HMI con pygame para la consola de `ensenar`; (6) opcional: trayectoria suave entre puntos, ver «Mejoras posibles» en [arquitectura](docs/arquitectura.md). `src/robots.json` lo edita Josu (IP de robots del laboratorio): `varios` sin `--config` se conectará a ellos.
 
 ## Documentación de la práctica
 
