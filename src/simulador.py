@@ -75,9 +75,3 @@ class Simulador:
                 pybullet.disconnect()
             except Exception:                   # ya estaba cerrada: da igual
                 pass
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_):
-        self.cerrar()

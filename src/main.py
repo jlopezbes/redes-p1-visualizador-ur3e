@@ -9,7 +9,7 @@ Practica 1: visualizador de un UR3e por TCP/IP. Punto de entrada; el trabajo est
     python src\\main.py ensenar --v 0.1 --a 0.2          enseñar y reproducir (ENVIA movej: robot con frenos liberados)
 
 Parar con Ctrl+C. Con un robot real: velocidades bajas y la zona despejada.
-Codigos de salida: 0 normal o Ctrl+C; 1 fallo al hablar con el robot, el simulador o un fichero; 2 argumentos o
+Codigos de salida: 0 normal o Ctrl+C; 1 fallo al hablar con el robot o con el simulador; 2 argumentos o
 configuracion (robots.json) mal puestos.
 """
 import argparse
@@ -19,7 +19,6 @@ import sys
 import tareas
 import ur
 from red import ErrorRed
-from secuencia import ErrorSecuencia
 from simulador import ErrorSimulador
 
 
@@ -58,7 +57,7 @@ def main():
             tareas.ensenar_reproducir(args.ip, args.puerto, args.velocidad, args.aceleracion)
     except KeyboardInterrupt:           # es la forma normal de parar
         pass
-    except (ValueError, ErrorRed, ErrorSimulador, ErrorSecuencia) as e:   # ValueError: IP, puerto o robots.json mal puestos
+    except (ValueError, ErrorRed, ErrorSimulador) as e:     # ValueError: IP, puerto o robots.json mal puestos
         print("Error: {}".format(e), file=sys.stderr)
         sys.exit(2 if isinstance(e, ValueError) else 1)
     # Cualquier otra excepcion es un fallo del programa: Python imprime el traceback y sale con codigo 1

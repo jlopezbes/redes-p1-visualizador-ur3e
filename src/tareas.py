@@ -10,7 +10,7 @@ Las cuatro tareas de la practica, como funciones que juntan los controladores:
 
 PyBullet solo se toca desde el hilo que llama a estas funciones; los hilos de ur.HiloLectorUR solo leen sockets.
 Orden en todas: primero se crean los clientes (validan IP y puerto, ValueError, sin abrir red) y despues el
-simulador, dentro de `with`: asi un argumento malo falla antes de abrir la ventana y la ventana se cierra siempre.
+simulador, con su cierre en un `finally`: asi un argumento malo falla antes de abrir la ventana y la ventana se cierra siempre.
 Los errores de las capas de abajo (ErrorRed, ErrorSimulador, ErrorSecuencia) los muestra main.py.
 """
 import json
@@ -30,32 +30,32 @@ def visualizar(clientes):
     robot cada segundo. Termina con Ctrl+C. Al salir, por lo que sea, detiene los hilos lectores. Un robot desconectado no se mueve."""
     lectores = [ur.HiloLectorUR(nombre, cliente) for nombre, cliente in clientes.items()]
     contados = {l.nombre: 0 for l in lectores}
-    with Simulador() as simulador:
+    simulador = Simulador()
+    try:
         for lector in lectores:
             simulador.agregar_robot(lector.nombre)
-        try:
+            lector.start()
+        t_info = time.time()
+        while True:
             for lector in lectores:
-                lector.start()
-            t_info = time.time()
-            while True:
+                q = lector.q
+                if q:
+                    simulador.mover(lector.nombre, q)
+            ahora = time.time()
+            if ahora - t_info >= 1.0:
                 for lector in lectores:
                     q = lector.q
-                    if q:
-                        simulador.mover(lector.nombre, q)
-                ahora = time.time()
-                if ahora - t_info >= 1.0:
-                    for lector in lectores:
-                        q = lector.q
-                        por_segundo = (lector.recibidos - contados[lector.nombre]) / (ahora - t_info)
-                        contados[lector.nombre] = lector.recibidos
-                        print("[{}] {:.0f} estados/s | q (grados): {}".format(
-                            lector.nombre, por_segundo,
-                            [round(math.degrees(a), 1) for a in q] if q else (lector.ultimo_error or "sin datos")))
-                    t_info = ahora
-                time.sleep(1 / 30)              # 30 redibujados por segundo
-        finally:
-            for lector in lectores:
-                lector.detener()
+                    por_segundo = (lector.recibidos - contados[lector.nombre]) / (ahora - t_info)
+                    contados[lector.nombre] = lector.recibidos
+                    print("[{}] {:.0f} estados/s | q (grados): {}".format(
+                        lector.nombre, por_segundo,
+                        [round(math.degrees(a), 1) for a in q] if q else (lector.ultimo_error or "sin datos")))
+                t_info = ahora
+            time.sleep(1 / 30)              # 30 redibujados por segundo
+    finally:
+        for lector in lectores:
+            lector.detener()
+        simulador.cerrar()
 
 
 def cargar_robots(ruta):
@@ -135,32 +135,33 @@ def ensenar_reproducir(ip, puerto, velocidad, aceleracion):
     robot = ur.ClienteUR(ip, puerto)
     rep = Reproductor(robot, Secuencia(), velocidad, aceleracion)
     comandos = queue.Queue()
+    simulador = Simulador()
     try:
-        with Simulador() as simulador:
-            simulador.agregar_robot("robot")
-            # La consola se lee DESPUES de abrir la ventana: un input() ya bloqueado impide que PyBullet termine de abrirla.
-            threading.Thread(target=_leer_consola, args=(comandos,), daemon=True).start()
-            salir = False
-            while not salir:                     # si se cae la conexion se vuelve a intentar
-                try:
-                    robot.conectar()
-                    print("Conectado a {}:{}. {}".format(ip, puerto, AYUDA))
-                    for datos in robot.mensajes():
-                        rep.procesar(datos)
-                        if rep.q:
-                            simulador.mover("robot", rep.q)
-                        while not comandos.empty() and not salir:
-                            salir = _comando(comandos.get(), rep, simulador)
-                        if salir:
-                            break
-                except ErrorRed as e:       # red caida, robot que cierra o calla, mensajes que no se entienden
-                    print("Conexion perdida ({}). Reintentando en {} s...".format(e, ur.REINTENTO))
-                    rep.conexion_perdida()
-                    try:                    # mientras espera, la consola sigue atendida: con 'q' se sale al instante
-                        salir = _comando(comandos.get(timeout=ur.REINTENTO), rep, simulador)
-                    except queue.Empty:
-                        pass
-    finally:                                # q, Ctrl+C, ventana cerrada o un bug: el robot no se queda en marcha
+        simulador.agregar_robot("robot")
+        # La consola se lee DESPUES de abrir la ventana: un input() ya bloqueado impide que PyBullet termine de abrirla.
+        threading.Thread(target=_leer_consola, args=(comandos,), daemon=True).start()
+        salir = False
+        while not salir:                     # si se cae la conexion se vuelve a intentar
+            try:
+                robot.conectar()
+                print("Conectado a {}. {}".format(robot.destino, AYUDA))
+                for datos in robot.mensajes():
+                    rep.procesar(datos)
+                    if rep.q:
+                        simulador.mover("robot", rep.q)
+                    while not comandos.empty() and not salir:
+                        salir = _comando(comandos.get(), rep, simulador)
+                    if salir:
+                        break
+            except ErrorRed as e:           # red caida, robot que cierra o calla, mensajes que no se entienden
+                print("Conexion perdida ({}). Reintentando en {} s...".format(e, ur.REINTENTO))
+                rep.conexion_perdida()
+                try:                        # mientras espera, la consola sigue atendida: con 'q' se sale al instante
+                    salir = _comando(comandos.get(timeout=ur.REINTENTO), rep, simulador)
+                except queue.Empty:
+                    pass
+    finally:                                # q, Ctrl+C, ventana cerrada o un bug: el robot se frena antes de cerrar nada
         if rep.ocupado:
             rep.cancelar()
         robot.desconectar()
+        simulador.cerrar()

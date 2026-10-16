@@ -68,6 +68,7 @@ class ClienteUR:
             puerto = PUERTO_TIEMPO_REAL if tiempo_real else PUERTO_PRIMARIA
         self.tiempo_real = tiempo_real
         self.red = ConexionTCP(ip, puerto)
+        self.destino = self.red.destino         # "ip:puerto", para los mensajes
         self._buffer = bytearray()
 
     # ---------- conexion ----------
@@ -95,7 +96,7 @@ class ClienteUR:
                     ignorados += 1
                     if ignorados > MAX_IGNORADOS:
                         raise ErrorRed("{}: llegan datos pero ninguno es un estado (puerto o interfaz equivocados? "
-                                       "primaria = 30001, tiempo real = 30003)".format(self.red.destino))
+                                       "primaria = 30001, tiempo real = 30003)".format(self.destino))
                 paquete = self._cortar()
 
     def _cortar(self):
@@ -105,7 +106,7 @@ class ClienteUR:
         longitud = struct.unpack(">i", self._buffer[:4])[0]
         minimo = OFFSET_Q_ACTUAL + 48 if self.tiempo_real else CABECERA
         if not minimo <= longitud <= MAX_LONGITUD:
-            raise ErrorRed("{}: longitud imposible ({}): buffer desalineado".format(self.red.destino, longitud))
+            raise ErrorRed("{}: longitud imposible ({}): buffer desalineado".format(self.destino, longitud))
         if len(self._buffer) < longitud:
             return None
         paquete = bytes(self._buffer[:longitud])
@@ -206,7 +207,7 @@ class HiloLectorUR(threading.Thread):
                 for datos in self.cliente.mensajes():
                     if "q" in datos:
                         if self.q is None:
-                            print("[{}] recibiendo estados de {}".format(self.nombre, self.cliente.red.destino))
+                            print("[{}] recibiendo estados de {}".format(self.nombre, self.cliente.destino))
                         self.q = datos["q"]
                         self.ultimo_error = None
                         self.recibidos += 1
