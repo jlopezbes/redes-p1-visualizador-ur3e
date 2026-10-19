@@ -24,7 +24,7 @@ echo   PRACTICA 1 - visualizador de robots UR3e
 echo ============================================================
 echo   1  Primaria     visualiza 1 o varios robots ^(puerto 30001^)
 echo   2  Tiempo real  visualiza 1 o varios robots ^(puerto 30003^)
-echo   3  Ensenar      guarda y reproduce puntos, con web de control
+echo   3  Ensenar      guarda y reproduce puntos desde la consola
 echo                   ENVIA movej: solo con el robot libre y zona despejada
 echo   4  Cambiar las IP de los robots ^(datos\robots.json^)
 echo   5  Salir
