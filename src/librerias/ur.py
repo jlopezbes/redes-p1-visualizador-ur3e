@@ -33,7 +33,7 @@ TIPO_ROBOT_MESSAGE = 20
 TIPO_ESTADO = 16
 SUB_MODO = 0
 SUB_JOINTS = 1
-TAM_SUB_JOINTS = 251    # 5 + 6 * 41 (NO verificado con un robot real: si el robot manda otro tamano, ErrorRed)
+TAM_SUB_JOINTS = 251    # 5 + 6 * 41 (si el robot manda otro tamano, ErrorRed)
 BYTES_JOINT = 41
 
 # ---- Tiempo real ----
@@ -217,7 +217,8 @@ class HiloLectorUR(threading.Thread):
     Si la conexion se cae, reintenta cada REINTENTO s. `cliente` es un ClienteUR sin conectar.
 
     Atributos que lee el programa principal (los escribe solo este hilo):
-        q              ultimo q recibido (6 angulos, rad), o None si no hay conexion
+        q              ultimo q recibido (6 angulos, rad), o None si no hay conexion. Se lee y se escribe con `with cerrojo:`
+        cerrojo        threading.Lock que protege q
         ultimo_error   por que no hay datos, o None si todo va bien
         recibidos      estados recibidos en total (sirve para calcular estados por segundo)"""
 
@@ -229,6 +230,7 @@ class HiloLectorUR(threading.Thread):
         self.ultimo_error = None
         self.recibidos = 0
         self._parar = threading.Event()
+        self.cerrojo = threading.Lock()         # protege q: el hilo lo escribe y el programa principal lo lee
 
     def run(self):
         while not self._parar.is_set():
@@ -240,7 +242,8 @@ class HiloLectorUR(threading.Thread):
                     if "q" in datos:
                         if self.q is None:
                             print("[{}] recibiendo estados de {}".format(self.nombre, self.cliente.destino))
-                        self.q = datos["q"]
+                        with self.cerrojo:
+                            self.q = datos["q"]
                         self.ultimo_error = None
                         self.recibidos += 1
             except ErrorRed as e:
@@ -248,7 +251,8 @@ class HiloLectorUR(threading.Thread):
                     if str(e) != self.ultimo_error:     # una sola linea por motivo, no una por reintento
                         print("[{}] DESCONECTADO ({}). Reintentando en {} s...".format(self.nombre, e, REINTENTO))
                     self.ultimo_error = str(e)
-                    self.q = None
+                    with self.cerrojo:
+                        self.q = None
             finally:
                 self.cliente.desconectar()
             self._parar.wait(REINTENTO)

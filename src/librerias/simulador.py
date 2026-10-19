@@ -96,13 +96,15 @@ def visualizar(clientes):
         t_info = time.time()
         while True:
             for lector in lectores:
-                q = lector.q
+                with lector.cerrojo:
+                    q = lector.q
                 if q:
                     simulador.mover(lector.nombre, q)
             ahora = time.time()
             if ahora - t_info >= 1.0:
                 for lector in lectores:
-                    q = lector.q
+                    with lector.cerrojo:
+                        q = lector.q
                     por_segundo = (lector.recibidos - contados[lector.nombre]) / (ahora - t_info)
                     contados[lector.nombre] = lector.recibidos
                     print("[{}] {:.0f} estados/s | q (grados): {}".format(
