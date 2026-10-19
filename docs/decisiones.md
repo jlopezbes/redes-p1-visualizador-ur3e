@@ -239,3 +239,13 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **No se hace:** escribir los avisos en un fichero (el enunciado no lo pide; serían 3 líneas).
 - **Distinto:** no.
 - **Commit:** pendiente.
+
+## D26 – La práctica es portable: un Python embebido con todo dentro y un `iniciar.bat` (2026-10-19)
+
+- **Contexto:** se ha sabido que la práctica debe poder ejecutarse en cualquier ordenador, sin pelearse con dependencias: solo ejecutar y cambiar las IP de los robots.
+- **Opciones:** (a) `requirements.txt` + `venv` que crea el `.bat`; (b) ruedas (`.whl`) en la carpeta e instalación sin internet; (c) un Python embebido (`python-3.7.5-embed-amd64.zip`) con las librerías ya copiadas dentro, y un `.bat` que lo usa.
+- **Elegida:** (c). (a) y (b) obligan a que el PC tenga Python 3.7 y a instalar, y **`pybullet` no tiene rueda para Python 3.7 en Windows** (F1): en un PC sin compilador no se instala. (c) no instala nada: la carpeta `entorno\` lleva el `pybullet.pyd` compilado aquí (5,9 MB), `numpy`, `scipy`, `pybullet_planning` y `UR3e_rg2` (la versión parcheada de `docs/entorno.md`). Con `python37._pth` el intérprete ignora el Python y el perfil del PC (comprobado: el humo de extremo a extremo y las 223 pruebas pasan con él).
+- **Cómo:** `herramientas/crear_entorno.ps1` lo genera (descarga 7,5 MB y copia lo instalado en este PC) y **no se versiona** (≈ 170 MB, `.gitignore`); `iniciar.bat` (en la carpeta de la práctica, con CRLF por `.gitattributes`) ofrece un menú (primaria, tiempo real, enseñar, editar IP, salir) o recibe el nombre del script, y pide confirmación antes de `ensenar` (envía `movej`). Si falta `entorno\`, usa el `python` del PC con un aviso. Se entrega comprimiendo la carpeta de la práctica con `entorno\`.
+- **Se pierde / riesgo:** pesa mucho; solo Windows de 64 bits; las librerías son las de este PC (si cambian, se vuelve a ejecutar el script). Un PC realmente limpio no se ha probado: por eso se copian los runtimes de Visual C++ de `System32`.
+- **Distinto:** sí, el enunciado no pide nada de esto; es un requisito nuevo del profesor, de segunda mano.
+- **Commit:** pendiente.

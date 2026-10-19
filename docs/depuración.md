@@ -2,7 +2,7 @@
 
 El profesor valora sobre todo saber depurar: cada fallo real queda como caso. Numeración fija F1, F2… con el más reciente arriba.
 
-Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F6 es de la fase 1 de `src/`; F7–F10 son de la revisión de robustez de la capa 1 (`red.py`) y F11–F14 de la capa 2 (`ur.py`) F15–F19 de la capa 3 (`secuencia.py`, `simulador.py`) F20 de la capa 4 (`main.py`, `tareas.py`) y F21 de la ejecución real con ventana tras las cuatro capas. **F25–F26 son de la web de control (2026-10-17).** **F22–F24 son de la limpieza por capas (2026-10-16).** Cada uno dice qué se ejecutó y qué solo se leyó.
+Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F6 es de la fase 1 de `src/`; F7–F10 son de la revisión de robustez de la capa 1 (`red.py`) y F11–F14 de la capa 2 (`ur.py`) F15–F19 de la capa 3 (`secuencia.py`, `simulador.py`) F20 de la capa 4 (`main.py`, `tareas.py`) y F21 de la ejecución real con ventana tras las cuatro capas. **F27–F28 son de la primera ejecución en Windows del prototipo (2026-10-19).** **F25–F26 son de la web de control (2026-10-17).** **F22–F24 son de la limpieza por capas (2026-10-16).** Cada uno dice qué se ejecutó y qué solo se leyó.
 
 **Qué casos describen código que la limpieza (D17–D21) ya cambió.** Se conservan como historia y como lección; el fallo que explican ya no puede ocurrir o se evita de otra forma:
 
@@ -18,6 +18,22 @@ Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F
 | F18, F19 | sin topes de fichero ni guardado atómico; el simulador no valida `q` ni posiciones |
 | F20 | `with Simulador()` → `try/finally`; el resto vale |
 | F21 | sigue valiendo (la consola se lee después de abrir la ventana) |
+
+## F28 – Tres pruebas fallaban en Windows por tiempos justos, no por el código (2026-10-19, `pruebas/`)
+
+- **Síntoma:** al ejecutar por primera vez las 223 pruebas con Python 3.7.5 en Windows: `test_detener_cierra_el_puerto…` (`socket.timeout`), `test_con_un_robot_caido_el_otro_sigue_en_marcha` (no aparecía «[caido] DESCONECTADO») y, en otra ejecución, `test_publicar_recorta_del_historial…` (`0.39 not >= 0.4`).
+- **Aislamiento:** ✅ ejecutado. Las dos primeras son F24 otra vez: en Windows conectar a un puerto local donde nadie escucha tarda 1–2 s en ser rechazado y las pruebas daban 2 s y 0,75 s. La tercera: `time.sleep(0.4)` puede durar 0,39 s medidos con `time.monotonic` (el reloj de Windows va a saltos de ≈ 15 ms).
+- **Causa:** supuestos de tiempo de pruebas escritas en Linux (la Pi).
+- **Arreglo:** `timeout=5` en la conexión, `pausas=80` (4 s) en la de `visualizar` con un robot caído y `sleep(0.5)` donde se exigía ≥ 0,4 s. Con eso, 223 de 223 OK.
+- **Lección:** en pruebas de tiempo, margen holgado y nunca igualdad con lo dormido; un puerto cerrado en Windows no se rechaza al instante.
+
+## F27 – El servidor web respondía sin leer el cuerpo del POST y Windows reiniciaba la conexión (2026-10-19, `src/librerias/hmi.py`)
+
+- **Síntoma:** `test_la_web_rechaza_peticiones_sin_token_o_mal_formadas` fallaba con `ConnectionAbortedError: [WinError 10053]` al enviar un `POST` con `Content-Type: text/plain` (esperaba 415). Con el Python del PC pasaba 8 de 8 veces; con el Python portable (`entorno\`) fallaba 8 de 8.
+- **Aislamiento:** ✅ ejecutado (8 repeticiones con cada intérprete). Es una carrera: `do_POST` contestaba 403/404/415 **sin leer el cuerpo** y cerraba la conexión; en Windows, cerrar un socket con datos recibidos sin leer envía un RST y el cliente pierde la respuesta. Según el intérprete y el momento, el cuerpo llegaba antes o después del cierre.
+- **Causa:** el cuerpo solo se leía en la rama de una orden válida. Además `Content-Length` negativo habría dejado el hilo esperando (`read(-5)` lee hasta el final).
+- **Arreglo:** `do_POST` lee siempre el cuerpo (como mucho 1000 bytes, nunca negativo) antes de decidir; después, las mismas comprobaciones. Con eso 223 de 223 OK con los dos intérpretes. La página usa siempre la ruta válida, así que no afectaba al uso normal; sí a quien probara la web a mano con `curl` y a las pruebas.
+- **Lección:** un servidor debe consumir la petición antes de responder, también cuando la rechaza; una prueba que pasa «casi siempre» en un entorno y siempre falla en otro señala una carrera real.
 
 ## F26 – Al salir de `ensenar` con `q`, Python 3.11 aborta con «Fatal Python error» por el hilo de la consola (2026-10-17, `src/ensenar.py`)
 
