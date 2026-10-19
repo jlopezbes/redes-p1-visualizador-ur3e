@@ -1,6 +1,8 @@
 # Dependencias para ejecutar la practica 1 en Linux (las instala iniciar.sh la primera vez, en entorno/, con uv).
 # Python 3.11: pybullet solo publica binarios para Linux hasta Python 3.11 (con 3.12 o superior habria que compilarlo),
 # y la rueda de UR3e_rg2 pide 3.9 o superior (usa importlib.resources.files y typing.TypedDict).
+# Se instala con --no-deps: esta lista es TODO lo necesario (pybullet_planning arrastra recordclass, rich, meshio...,
+# que UR3e_rg2 no usa y que no tienen binarios para Linux). Es lo mismo que lleva el Python portable de Windows.
 # En Windows no se usa: alli esta el Python portable de entorno/ (ver iniciar.bat).
 numpy<2
 scipy<1.13
