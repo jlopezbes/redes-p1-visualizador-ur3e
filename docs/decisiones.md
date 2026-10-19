@@ -222,7 +222,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Distinto:** sí, respecto a D8 y D22. Cumple la letra del enunciado.
 - **Commit:** pendiente.
 
-## D24 – Una web de control en `localhost` para `ensenar`, con `http.server` y sin dependencias (2026-10-17)
+## D24 – Una web de control en `localhost` para `ensenar`, con `http.server` y sin dependencias (2026-10-17) — RETIRADA el 2026-10-19 (D27)
 
 - **Contexto:** la consola de `ensenar` obliga a recordar letras y no enseña el estado ni las alarmas; Josu quería «una especie de HMI» con el estado del robot, registrar puntos, alarmas, velocidad ajustable y el movimiento de cada articulación en un gráfico. El enunciado no lo pide (solo menciona los deslizadores de PyBullet como opción): no sube nota.
 - **Opciones:** (a) ventana con `pygame` o `tkinter`; (b) web servida por el propio programa; (c) Flask u otro framework.
@@ -248,4 +248,24 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Cómo:** `herramientas/crear_entorno.ps1` lo genera (descarga 7,5 MB y copia lo instalado en este PC) y **no se versiona** (≈ 170 MB, `.gitignore`); `iniciar.bat` (en la carpeta de la práctica, con CRLF por `.gitattributes`) ofrece un menú (primaria, tiempo real, enseñar, editar IP, salir) o recibe el nombre del script, y pide confirmación antes de `ensenar` (envía `movej`). Si falta `entorno\`, usa el `python` del PC con un aviso. Se entrega comprimiendo la carpeta de la práctica con `entorno\`.
 - **Se pierde / riesgo:** pesa mucho; solo Windows de 64 bits; las librerías son las de este PC (si cambian, se vuelve a ejecutar el script). Un PC realmente limpio no se ha probado: por eso se copian los runtimes de Visual C++ de `System32`.
 - **Distinto:** sí, el enunciado no pide nada de esto; es un requisito nuevo del profesor, de segunda mano.
+- **Commit:** pendiente.
+
+## D27 – Se retira la web de control: `ensenar` vuelve a ser solo de consola (2026-10-19)
+
+- **Contexto:** Josu probó `iniciar.bat` (2026-10-19). En la web no entendía para qué servía «previsualizar» y no veía que hiciera nada; para la defensa prefiere guardar puntos por consola y poder explicar cada línea. La web además era un extra fuera del enunciado (D24).
+- **Opciones:** (a) dejar la web y explicarla; (b) quitarla entera; (c) dejarla sin la previsualización.
+- **Elegida:** (b). Se borran `hmi.py`, `hmi.html`, `test_hmi.py`, `ensenar._estado`, el arranque del servidor y del navegador, y la cola de avisos con hora (`secuencia.avisar` y `mensajes`: solo existían para la web; `avisar` pasa a ser `print`, como antes de D25). Se **conservan** la consola, `ajustar` (cambios de velocidad en caliente) y todo el blindaje de `ensenar`. 223 pruebas pasan a 181.
+- **Mejora de paso:** `v` ahora escribe «Previsualizando N puntos en la ventana (el robot real no se mueve)...» y «Previsualizacion terminada», porque desde la consola tampoco se notaba qué hacía. **Qué hace `v`:** mueve el robot **simulado** de la ventana, por interpolación lineal, desde su pose actual por cada punto guardado (≤ 20 s), sin enviar nada al robot real; luego el simulador vuelve a seguir al robot real. Es el «previsualizar» que pide el enunciado.
+- **Se pierde:** el gráfico de las 6 articulaciones, el panel de alarmas y los botones. Las alarmas siguen saliendo por consola («ERROR del robot», «*** FALLO DE LA SECUENCIA»). F25–F27 pasan a historia (el código que describen ya no existe).
+- **El robot 2 inmóvil (resuelto, F29):** Josu vio el segundo robot de la ventana en la pose por defecto (brazo estirado, q = 0) con `tiempo_real` y dos URSim: no era la web ni URSim, sino una carrera al conectar dos hilos a la vez con el Python portable.
+- **Distinto:** sí, respecto a D24 (la sustituye).
+- **Commit:** pendiente.
+
+## D28 – Linux: `iniciar.sh` con un `venv` que se crea la primera vez (2026-10-19)
+
+- **Contexto:** se ha sabido que la práctica debe ejecutarse en Windows y en Linux.
+- **Opciones:** (a) un entorno embebido también en Linux; (b) `iniciar.sh` que crea un `venv` en `entorno/` e instala `requirements-linux.txt` la primera vez; (c) exigir que el usuario instale las dependencias a mano.
+- **Elegida:** (b). En Linux, `pybullet` sí tiene ruedas, así que `pip` basta; en Windows no (D26). La rueda de `UR3e_rg2` (para Python ≥ 3.9) se copia a `recursos/` para que la carpeta de la práctica sea autónoma. Mismo menú y mismos argumentos que `iniciar.bat`.
+- **Se pierde / riesgo:** la primera vez hace falta internet y `python3` ≥ 3.9 con `venv`; no hay un «entorno ya montado» como en Windows. **No está probado en Linux** (no hay Linux ni WSL aquí): sin ejecutar ni `bash -n`. El código Python no tiene nada específico de Windows (sin `msvcrt`, `os.name` ni rutas fijas) y la Pi ejecutó las pruebas de la versión anterior en Linux (T14), pero no `iniciar.sh`, ni la instalación de `pybullet_planning` con la `scipy` de allí (se fija `scipy<1.13` y `numpy<2` por prudencia).
+- **Distinto:** sí, el enunciado no lo pide; es un requisito nuevo del profesor, de segunda mano.
 - **Commit:** pendiente.

@@ -1,16 +1,16 @@
 # Arquitectura
 
-Versión final en `src/`: escrita por la IA a partir de `claude_2`, endurecida en la auditoría de robustez (2026-10-14) y **limpiada por capas** el 2026-10-15/16 (D17–D21; 1176 → 817 líneas), y el 2026-10-17 **reorganizada por niveles** (D23: un script por entregable, las clases en `src/librerias/`, sin `argparse` ni `tareas.py`) con una **web de control** para `ensenar` (D24). Pendiente de la revisión final de Josu. Python 3.7.5, solo `socket`, `struct`, `threading`, `http.server` y la librería estándar, más `UR3e_rg2` (PyBullet) para dibujar.
+Versión final en `src/`: escrita por la IA a partir de `claude_2`, endurecida en la auditoría de robustez (2026-10-14) y **limpiada por capas** el 2026-10-15/16 (D17–D21; 1176 → 817 líneas), y el 2026-10-17 **reorganizada por niveles** (D23: un script por entregable, las clases en `src/librerias/`, sin `argparse` ni `tareas.py`) y una web de control para `ensenar` que se **retiró el 2026-10-19** (D24 sustituida por D27: nadie la defendería con el UR3e delante). Pendiente de la revisión final de Josu. Python 3.7.5, solo `socket`, `struct`, `threading` y la librería estándar, más `UR3e_rg2` (PyBullet) para dibujar.
 
 ## Módulos
 
-**Scripts ejecutables** (`src/`, uno por nivel del enunciado; no tienen argumentos: la IP sale de `datos/robots.json` y lo demás son constantes o la web):
+**Scripts ejecutables** (`src/`, uno por nivel del enunciado; no tienen argumentos: la IP sale de `datos/robots.json` y lo demás son constantes):
 
 | Archivo | Nivel | Qué hace |
 |---|---|---|
 | `src/primaria.py` | Aprobado | Visualiza 1 o varios robots por la interfaz primaria (30001). Pregunta con `input` cuántos (Intro = 1). |
 | `src/tiempo_real.py` | Aprobado | Igual, por la interfaz de tiempo real (30003). |
-| `src/ensenar.py` | Sobresaliente | Enseñar, previsualizar, ejecutar y supervisar con el primer robot del JSON. Lleva la consola (`_leer_consola`, `_comando`), el bucle principal y arranca la web. |
+| `src/ensenar.py` | Sobresaliente | Enseñar, previsualizar, ejecutar y supervisar con el primer robot del JSON. Lleva la consola (`_leer_consola`, `_comando`), y el bucle principal. |
 
 Los dos primeros son casi idénticos a propósito: son los dos «scripts separados» que pide el enunciado y la única diferencia es `tiempo_real=True`. El notable (varios robots en una ventana) lo cubren con la respuesta «2» a la pregunta.
 
@@ -21,8 +21,7 @@ Los dos primeros son casi idénticos a propósito: son los dos «scripts separad
 | `ur.py` | clases `ClienteUR`, `HiloLectorUR`; funciones `es_punto_valido`, `leer_robots`, `elegir_robots` | **Portal entre la red y el robot** (D18): conecta, corta los bytes en paquetes, los decodifica y entrega diccionarios ya traducidos (`mensajes()`); envía `movej`/`stopj`. Una sola clase para la interfaz primaria y la de tiempo real. `HiloLectorUR` es el hilo aparte que lee un robot y guarda solo el último `q`. `leer_robots` lee `robots.json`; `elegir_robots` pregunta cuántos visualizar. |
 | `red.py` | clases `ConexionTCP`, `ErrorRed`, `ErrorRedTimeout` | **Red pura**: conectar, desconectar, enviar y recibir por TCP con timeouts. No conoce el protocolo del UR. Valida IP y puerto y **traduce todo fallo de socket a `ErrorRed`** (D19). |
 | `simulador.py` | clases `Simulador`, `ErrorSimulador`; función `visualizar` | Envuelve `UR3eRG2` (PyBullet): robots por nombre, colocados en fila a 1 m (D21), `mover`, `previsualizar` y `cerrar`. Convierte los fallos de la librería en `ErrorSimulador`. `visualizar(clientes)` es el bucle de `primaria.py` y `tiempo_real.py` (antes en `tareas.py`). |
-| `secuencia.py` | clases `Secuencia`, `Reproductor`, `ErrorSecuencia`; `avisar`, `mensajes` | Enseñar y reproducir: `Secuencia` es una lista de puntos que se guarda y carga en JSON; `Reproductor` es la máquina de estados que envía un `movej` por punto, vigila errores y permite `ajustar` velocidad y aceleración. No deja escapar `ErrorRed`. `avisar(texto)` imprime y guarda los últimos 50 avisos con hora para la web. |
-| `hmi.py` + `hmi.html` | clase `HMI` | Servidor web de `ensenar.py` (ver «HMI web»). |
+| `secuencia.py` | clases `Secuencia`, `Reproductor`, `ErrorSecuencia`; | Enseñar y reproducir: `Secuencia` es una lista de puntos que se guarda y carga en JSON; `Reproductor` es la máquina de estados que envía un `movej` por punto, vigila errores y permite `ajustar` velocidad y aceleración. No deja escapar `ErrorRed`. |
 
 **Datos** (`datos/`): `robots.json` (solo `nombre` e `ip`, D21; `primaria` y `tiempo_real` usan los primeros N que se pidan, `ensenar` el primero) y `secuencias/` (los puntos guardados). Todas las rutas se calculan a partir de la ubicación del script (`os.path.dirname(os.path.abspath(__file__))` y `..`), nunca absolutas: la práctica funciona igual en cualquier PC y desde cualquier carpeta.
 
@@ -32,7 +31,7 @@ Los dos primeros son casi idénticos a propósito: son los dos «scripts separad
 python src\primaria.py      python src\tiempo_real.py      python src\ensenar.py
         |                           |                            |
         v                           v                            v
-  simulador.visualizar ──────────────┘                    consola + web (hmi.py)
+  simulador.visualizar ──────────────┘                    consola (hilo aparte)
         │                                                        │ lineas de texto → queue.Queue
         │                                                        v
    ┌────┴─────────────┐                     ┌──────────────── hilo principal ────────────────┐
@@ -104,7 +103,7 @@ Fases del `Reproductor`: `LIBRE`, `ENVIADO` (se envió un `movej` y aún no se v
 | Tarea | Hilos | Qué comparten y cómo |
 |---|---|---|
 | `primaria.py` / `tiempo_real.py` (`visualizar`) | un `HiloLectorUR` por robot + el hilo principal | Cada hilo guarda solo el **último `q`** en su atributo `q`; el hilo principal lo lee y dibuja 30 veces por segundo, sin bloquearse aunque un robot tarde en contestar. Si el robot se cae, `q` pasa a `None` y el robot simulado se queda quieto. |
-| `ensenar.py` | hilo principal + un hilo que lee la consola + los hilos del servidor web | La consola y la web solo meten líneas de texto en la misma `queue.Queue`; el principal lee los mensajes del robot, atiende los comandos, dibuja y **publica** una copia del estado en `HMI.publicar`, que los hilos del servidor **leen** con un `Lock`. No usa `HiloLectorUR`: necesita todos los mensajes (errores, `isProgramRunning`). |
+| `ensenar.py` | hilo principal + un hilo que lee la consola | La consola solo mete líneas de texto en una `queue.Queue`; el principal lee los mensajes del robot, atiende los comandos y dibuja. No usa `HiloLectorUR`: necesita todos los mensajes (errores, `isProgramRunning`). |
 
 **PyBullet se toca solo desde el hilo principal** (no es seguro entre hilos). Los hilos terminan con `detener()` y son `daemon`: no impiden salir con Ctrl+C. Al salir de `visualizar` y de `ensenar.main`, un `try/finally` frena el robot si hace falta, detiene los hilos y cierra la ventana, en ese orden.
 
@@ -122,35 +121,14 @@ Fases del `Reproductor`: `LIBRE`, `ENVIADO` (se envió un `movej` y aún no se v
 | `red.py` | `TIMEOUT_CONEXION` / `TIMEOUT_LECTURA` | 5,0 / 2,0 | s | Tiempo máximo para conectar y para que llegue algo. |
 | `secuencia.py` | `TOLERANCIA`, `ESPERA_ARRANQUE` | 0,01, 2,0 | rad, s | Cuándo se da un punto por alcanzado y cuánto se espera a que arranque el programa. |
 | `simulador.py` | `MAX_PREVIEW`, `PASOS_TRAMO`, `DURACION_TRAMO` | 20,0, 20, 1,0 | s, pasos, s | Duración máxima de `previsualizar` (bloquea el hilo principal), pasos de interpolación y segundos por tramo. |
-| `ensenar.py` | `VELOCIDAD`, `ACELERACION` | 0,1 / 0,2 | rad/s / rad/s² | Velocidad y aceleración iniciales de cada `movej`; se cambian desde la web (`ajustar`) dentro de los límites de `ur.py`. |
+| `ensenar.py` | `VELOCIDAD`, `ACELERACION` | 0,1 / 0,2 | rad/s / rad/s² | Velocidad y aceleración iniciales de cada `movej`; se cambian con `ajustar` dentro de los límites de `ur.py`. |
 | `ensenar.py` | `ROBOTS`, `SECUENCIAS` | `datos/robots.json`, `datos/secuencias/` | | Rutas relativas al script. |
-| `hmi.py` | `HMI(puerto=8080)`, `VENTANA`, `MAX_ORDEN` | 8080, 60, 100 | puerto, s, caracteres | Puerto preferido (si está ocupado, uno libre), historial de `q` que envía a la página y largo máximo de una orden. |
-
-## HMI web (`hmi.py` + `hmi.html`, D24)
-
-`ensenar.py` arranca un servidor `http.server` en un hilo y abre `http://127.0.0.1:8080/?t=<token>` en el navegador (si no puede, escribe la URL en la consola). La consola sigue funcionando: es el respaldo si falla el navegador.
-
-| Petición | Qué hace |
-|---|---|
-| `GET /?t=` | La página (`hmi.html`, sin dependencias) con el último estado ya incrustado, para que salga con datos al primer pintado. |
-| `GET /estado?t=` | JSON con el estado (ver abajo) y el historial de `q` de los últimos 60 s: `[[t, q1..q6], ...]`, t en s, q en rad. La página lo pide 5 veces por segundo. |
-| `POST /orden?t=` | `{"linea": "g"}`: mete la línea en la `queue` de comandos, como si se hubiera escrito en la consola. |
-
-Estado que publica `ensenar._estado` (una copia nueva en cada mensaje del robot): `robot` (`ip:puerto`), `conectado`, `q` (rad), `ejecutando`, `protegido`, `emergencia`, `modo` (`robotMode`), `fase` (`libre`, `enviado`, `moviendo`, `parada`), `punto`, `puntos` (rad), `velocidad` (rad/s), `aceleracion` (rad/s²), `limites`, `ficheros` y `mensajes` (los últimos 30 avisos).
-
-**Qué se ve y se hace:** conexión, modo del robot (nombres de la tabla *Robot Modes* del manual de la interfaz primaria), flags de parada de protección y de emergencia, fase de la secuencia y un banner de alarma; botones guardar, previsualizar, ejecutar (con confirmación), reanudar, borrar y **PARAR**; velocidad y aceleración ajustables (`ajustar`, dentro de 0,001–0,3 rad/s y 0,001–0,5 rad/s²); guardar y cargar ficheros de `datos/secuencias/`; gráfico de las 6 articulaciones en el tiempo (10, 30 o 60 s; clic en la tabla para mostrar u ocultar una) con tabla de valores y de objetivo del punto en curso; tabla de puntos y registro de mensajes.
-
-**Concurrencia:** el hilo principal es el único que toca el robot, PyBullet y la lista de puntos; el servidor solo lee una copia del estado bajo un `Lock` y escribe líneas en la cola. Es el mismo reparto que `HiloLectorUR`, y aquí sí hay `Lock` porque lo que se lee es el estado entero y el historial (una colección que crece), no una referencia que se reasigna.
-
-**Seguridad** (la web puede mandar `movej`): solo escucha en `127.0.0.1`; cada petición lleva un token aleatorio generado al arrancar; se rechaza (403) una cabecera `Host` distinta de `127.0.0.1` o `localhost` (evita que una página externa llegue por el nombre de otro equipo) y un `POST` que no sea JSON (415); las órdenes se limitan a 100 caracteres sin saltos de línea; los ficheros solo se guardan y cargan por nombre dentro de `datos/secuencias/` (`os.path.basename`, sin carpetas). Los textos que vienen del robot se escriben con `textContent` y el JSON incrustado en la página escapa `<`. **La seta del pendant sigue siendo la parada real**; el botón PARAR es software. Esto responde en parte a la pregunta 10 del enunciado (riesgo de un puerto abierto): en el propio programa, la web no se expone a la red.
-
-**Límites:** la previsualización bloquea el hilo principal hasta 20 s (`MAX_PREVIEW`) y la web no se actualiza mientras tanto; sin gráfico para `primaria.py` ni `tiempo_real.py` (solo para `ensenar.py`); no se ha visto en un navegador con URSim ni con un UR3e real (ver [pruebas](pruebas.md)).
 
 ## Mejoras posibles (ideas, nada implementado ni probado)
 
-**Gráfico y estado en `primaria.py` y `tiempo_real.py`.** `HMI` solo necesita que el hilo principal le publique un diccionario; `visualizar` podría hacerlo con el último `q` de cada `HiloLectorUR` y mostrar las dos interfaces comparadas (pregunta 7 del enunciado: retraso entre URSim y el simulador). No implementado.
+**Gráfico y estado en `primaria.py` y `tiempo_real.py`.** `visualizar` podría guardar el último `q` de cada `HiloLectorUR` y mostrar las dos interfaces comparadas (pregunta 7 del enunciado: retraso entre URSim y el simulador). No implementado.
 
-**Registro de órdenes en fichero.** Anotar con hora cada `movej` y `stopj` enviados en `datos/registro.txt` (unas 3 líneas en `avisar`). El enunciado no lo pide; no se ha añadido.
+**Registro de órdenes en fichero.** Anotar con hora cada `movej` y `stopj` enviados en `datos/registro.txt` (unas 3 líneas en `Reproductor`). El enunciado no lo pide; no se ha añadido.
 
 **Trayectoria suave entre puntos.** Hoy el robot se para en cada punto: `movej(q, a, v)` planifica un perfil trapezoidal que acaba con velocidad cero, y el `Reproductor` no envía el siguiente hasta que `isProgramRunning` baja. Fuente: el manual de URScript (`fuentes/manuales/scriptmanualG5_.pdf`, entrada de `movej`; no contrastado en el PDF).
 

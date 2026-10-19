@@ -2,7 +2,7 @@
 
 El profesor valora sobre todo saber depurar: cada fallo real queda como caso. Numeración fija F1, F2… con el más reciente arriba.
 
-Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F6 es de la fase 1 de `src/`; F7–F10 son de la revisión de robustez de la capa 1 (`red.py`) y F11–F14 de la capa 2 (`ur.py`) F15–F19 de la capa 3 (`secuencia.py`, `simulador.py`) F20 de la capa 4 (`main.py`, `tareas.py`) y F21 de la ejecución real con ventana tras las cuatro capas. **F27–F28 son de la primera ejecución en Windows del prototipo (2026-10-19).** **F25–F26 son de la web de control (2026-10-17).** **F22–F24 son de la limpieza por capas (2026-10-16).** Cada uno dice qué se ejecutó y qué solo se leyó.
+Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F6 es de la fase 1 de `src/`; F7–F10 son de la revisión de robustez de la capa 1 (`red.py`) y F11–F14 de la capa 2 (`ur.py`) F15–F19 de la capa 3 (`secuencia.py`, `simulador.py`) F20 de la capa 4 (`main.py`, `tareas.py`) y F21 de la ejecución real con ventana tras las cuatro capas. **F27–F29 son de la primera ejecución en Windows del prototipo (2026-10-19); F25–F27 describen la web, retirada ese mismo día (D27): se conservan como lección.** **F25–F26 son de la web de control (2026-10-17).** **F22–F24 son de la limpieza por capas (2026-10-16).** Cada uno dice qué se ejecutó y qué solo se leyó.
 
 **Qué casos describen código que la limpieza (D17–D21) ya cambió.** Se conservan como historia y como lección; el fallo que explican ya no puede ocurrir o se evita de otra forma:
 
@@ -18,6 +18,15 @@ Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F
 | F18, F19 | sin topes de fichero ni guardado atómico; el simulador no valida `q` ni posiciones |
 | F20 | `with Simulador()` → `try/finally`; el resto vale |
 | F21 | sigue valiendo (la consola se lee después de abrir la ventana) |
+
+## F29 – El segundo robot se quedaba en la pose por defecto y no se movía, mientras la consola decía que recibía datos (2026-10-19, `src/librerias/red.py`)
+
+- **Síntoma (Josu, `iniciar.bat` → tiempo real, 2 robots):** el robot 1 de la ventana se movía; el robot 2 seguía con el brazo estirado en horizontal (q = 0) aunque se moviera su URSim. La consola mostraba líneas de los dos robots, así que parecía que recibía datos.
+- **Aislamiento:** ✅ ejecutado. (1) El humo de extremo a extremo con el Python portable fallaba a ratos en «2 robots, tiempo real»: `[r2] 0 estados/s | q (grados): sin datos` sin parar, con `r1` bien. (2) Se capturó la salida de un intento fallido: `Traceback … HiloLectorUR.run → ClienteUR.conectar → ConexionTCP.conectar → socket.create_connection → getaddrinfo` y **`LookupError: unknown encoding: idna`**. (3) Reproducido en 8 líneas, sin robots: dos hilos haciendo `socket.create_connection` a la vez en un proceso recién arrancado fallan 2–3 veces de cada 40–120 con el Python portable y 0 de 40 con el del PC. Con URSim real no se reprodujo en las 8 ejecuciones posteriores, pero la causa es la misma.
+- **Causa:** la primera vez que se conecta a una IP, Python convierte el nombre con el códec `idna`, que carga de forma perezosa. Si **dos hilos lo hacen a la vez** (un `HiloLectorUR` por robot, los dos conectan al arrancar), el segundo puede ver el códec a medio importar y falla con `LookupError`, que no es `ErrorRed`: el hilo **muere en silencio** (solo escribe el traceback en `stderr`) y ese robot ya no recibe nada. Con el Python embebido la biblioteca estándar está dentro de un zip, los imports son más lentos y la ventana de la carrera es mayor; con el Python instalado casi no se ve. En «sin datos» no había error porque `ultimo_error` solo se rellena con `ErrorRed`.
+- **Arreglo:** una línea al principio de `red.py`: `import encodings.idna`, que carga el códec una vez, en el hilo principal, antes de crear ningún hilo. Medido: 0 fallos de 120 con el arreglo frente a 3 de 120 sin él; humo portable 5 de 5 `TODO OK` (antes fallaba en 4 de 6); 2 URSim por `iniciar.bat`, 4 de 4 con datos en ambos robots.
+- **No se hace:** capturar `Exception` en el hilo para que no muera: Python ya imprime el traceback y la política del proyecto (criterio 5) es no tapar los fallos de programación.
+- **Lección:** un hilo que muere por una excepción inesperada no se nota en la salida normal («sin datos» parece un robot parado); y lo que falla solo con el entorno portable puede ser una carrera que el Python instalado esconde. La prueba de aislamiento de 8 líneas fue la que lo confirmó.
 
 ## F28 – Tres pruebas fallaban en Windows por tiempos justos, no por el código (2026-10-19, `pruebas/`)
 

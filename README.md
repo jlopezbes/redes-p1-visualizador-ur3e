@@ -27,32 +27,34 @@ Límites obligatorios en el robot real: **0,3 rad/s y 0,5 rad/s²**, secuencia p
 | Aprobado: un robot por la interfaz primaria (30001) → PyBullet | `src/primaria.py` | ✅ URSim (10 estados/s, reconectó solo tras una caída), 2026-10-19; lo que se ve en la ventana lo mira Josu |
 | Aprobado: un robot por la interfaz de tiempo real (30003) → PyBullet | `src/tiempo_real.py` | ✅ URSim (≈ 420 estados/s), 2026-10-19 |
 | Notable: varios robots en la misma ventana, un hilo por robot, sin tocar el código | `primaria.py` o `tiempo_real.py` y respuesta «2» (robots en `datos/robots.json`) | ✅ 2 URSim a la vez (tiempo real); el caso «uno se cae» solo con robots falsos |
-| Sobresaliente: enseñar, previsualizar, ejecutar con `movej` y supervisar errores | `src/ensenar.py` (consola y web de control) | ⚠️ URSim robot1: cargar, ejecutar, cancelar (`stopj`) y secuencia completa; **sin probar** el error del robot / parada de protección con URSim, la web en el navegador y el UR3e |
+| Sobresaliente: enseñar, previsualizar, ejecutar con `movej` y supervisar errores | `src/ensenar.py` (consola) | ⚠️ URSim robot1: cargar, ejecutar, cancelar (`stopj`) y secuencia completa; **sin probar** el error del robot / parada de protección con URSim y el UR3e |
 
-✅/⚠️ = 223 pruebas automáticas (Python 3.7.5 en Windows, con el Python del PC y con el portable), los scripts contra robots falsos y contra URSim el 2026-10-19; ❌ UR3e real. Detalle en [docs/pruebas.md](docs/pruebas.md).
+✅/⚠️ = 181 pruebas automáticas (Python 3.7.5 en Windows, con el Python del PC y con el portable), los scripts contra robots falsos y contra URSim el 2026-10-19; ❌ UR3e real. Detalle en [docs/pruebas.md](docs/pruebas.md).
 
 ## 3. Cómo ejecutar
 
-**En cualquier PC (portable, D26):** doble clic en [iniciar.bat](iniciar.bat). Menú: 1 `primaria`, 2 `tiempo_real`, 3 `ensenar` (pide confirmación: envía `movej`), 4 abre `datos\robots.json` para cambiar las IP, 5 salir. También `iniciar.bat primaria|tiempo_real|ensenar` sin menú. Usa el Python de la carpeta `entorno\` (nada que instalar); si no existe, usa el `python` del PC. El entorno se crea con `powershell -ExecutionPolicy Bypass -File herramientas\crear_entorno.ps1` (raíz del repo; ver [docs/entorno.md](../../docs/entorno.md)) y para entregar se comprime esta carpeta entera con `entorno\` dentro.
+**En Windows, en cualquier PC (portable, D26):** doble clic en [iniciar.bat](iniciar.bat). Menú: 1 `primaria`, 2 `tiempo_real`, 3 `ensenar` (pide confirmación: envía `movej`), 4 abre `datos\robots.json` para cambiar las IP, 5 salir. También `iniciar.bat primaria|tiempo_real|ensenar` sin menú. Usa el Python de la carpeta `entorno\` (nada que instalar); si no existe, usa el `python` del PC. El entorno se crea con `powershell -ExecutionPolicy Bypass -File herramientas\crear_entorno.ps1` (raíz del repo; ver [docs/entorno.md](../../docs/entorno.md)) y para entregar se comprime esta carpeta entera con `entorno\` dentro.
+
+**En Linux (D28, sin probar):** `./iniciar.sh` (misma interfaz: menú o `./iniciar.sh primaria|tiempo_real|ensenar`). La primera vez crea un `venv` en `entorno/` e instala [requirements-linux.txt](requirements-linux.txt) (necesita `python3` ≥ 3.9 con `venv` e internet); la rueda de `UR3e_rg2` viaja en `recursos/`. Si no es ejecutable: `chmod +x iniciar.sh`.
 
 **Con el Python del PC** (desarrollo). Entorno (Python 3.7.5, URSim, puertos): [docs/entorno.md](../../docs/entorno.md). Desde la raíz del repo, en PowerShell 5.1. Los scripts no tienen argumentos y funcionan lancen desde donde se lancen (las rutas son relativas al script):
 
 ```powershell
 python -u 2_practicas\Practica1_visualizador_UR3e\src\primaria.py      # interfaz primaria (30001); pregunta cuántos robots (Intro = 1)
 python -u 2_practicas\Practica1_visualizador_UR3e\src\tiempo_real.py   # interfaz de tiempo real (30003); igual
-python -u 2_practicas\Practica1_visualizador_UR3e\src\ensenar.py       # ¡ENVIA movej al robot! Abre la web de control
+python -u 2_practicas\Practica1_visualizador_UR3e\src\ensenar.py       # ¡ENVIA movej al robot! Se maneja con comandos
 ```
 
 Los robots (nombre e IP) están **solo en `datos\robots.json`** (D23): cambiar de robot es editar ese fichero. `ensenar.py` usa el primero. Parar con Ctrl+C.
 
-`ensenar.py` imprime `Web de control: http://127.0.0.1:8080/?t=…` y abre el navegador (D24). Se maneja desde la web o desde la consola: `g` guardar punto, `v` previsualizar, `e` ejecutar, `c` cancelar, `r` reanudar, `s`/`l [nombre]` guardar/cargar en `datos\secuencias\`, `b` borrar, `ajustar <v rad/s> <a rad/s²>`, `q` salir. **Antes de `e`:** el robot encendido con frenos liberados (`robotMode = 7`) y, en URSim/PolyScope 5, *Ajustes → Sistema → Control remoto* en **Remoto**; velocidades bajas (por defecto 0,1 rad/s y 0,2 rad/s²) y zona despejada en un robot real. `movej` se niega a enviar más de 0,3 rad/s o 0,5 rad/s².
+`ensenar.py` se maneja escribiendo comandos en la consola: `g` guardar punto, `v` previsualizar (mueve **solo el robot de la ventana** por los puntos guardados, sin enviar nada al robot real; luego vuelve a la pose real), `e` ejecutar, `c` cancelar, `r` reanudar, `s`/`l [nombre]` guardar/cargar en `datos\secuencias\`, `b` borrar, `ajustar <v rad/s> <a rad/s²>`, `q` salir. **Antes de `e`:** el robot encendido con frenos liberados (`robotMode = 7`) y, en URSim/PolyScope 5, *Ajustes → Sistema → Control remoto* en **Remoto**; velocidades bajas (por defecto 0,1 rad/s y 0,2 rad/s²) y zona despejada en un robot real. `movej` se niega a enviar más de 0,3 rad/s o 0,5 rad/s².
 
 **Pruebas** (no necesitan robot ni URSim; las de PyBullet real sí necesitan la librería):
 
 ```powershell
-python -B -m unittest discover -s 2_practicas\Practica1_visualizador_UR3e\pruebas -v          # 223 pruebas, ≈ 55 s
+python -B -m unittest discover -s 2_practicas\Practica1_visualizador_UR3e\pruebas -v          # 181 pruebas, ≈ 40 s
 python -u 2_practicas\Practica1_visualizador_UR3e\pruebas\humo_pybullet.py                   # Simulador con la librería real (ventana ≈ 2 s)
-python -u 2_practicas\Practica1_visualizador_UR3e\pruebas\humo_extremo_a_extremo.py          # los 3 scripts con ventana real y la web
+python -u 2_practicas\Practica1_visualizador_UR3e\pruebas\humo_extremo_a_extremo.py          # los 3 scripts con ventana real
 ```
 
 Para probar las versiones archivadas sin robot, con el robot falso de Claude 1 (solo lectura; **no lanzarlo con URSim abierto**: comparten puertos):
@@ -82,11 +84,13 @@ Comparación: [docs/desde-pi/comparacion-versiones-p1.md](../../docs/desde-pi/co
 
 **Historia (2026-10-14/16):** fase 1 (código de la IA a partir de `claude_2`, en módulos), revisión de robustez (cuatro capas, F7–F21) y limpieza por capas (D17–D21, `src/` de 1176 a 817 líneas); D22: el robot sale de `robots.json`. La versión con `main.py` se enseñó al profesor con URSim.
 
-**Reorganización por niveles y web de control (2026-10-17, D23–D25):** un script por entregable (`primaria.py`, `tiempo_real.py`, `ensenar.py`) y las clases en `src/librerias/` (`red`, `ur`, `simulador`, `secuencia`, `hmi`); sin `argparse` ni `tareas.py`; rutas relativas a la carpeta de la práctica (`datos/robots.json`, `datos/secuencias/`); web de control para `ensenar` con estado, alarmas, puntos, velocidad y aceleración ajustables y gráfico de las 6 articulaciones. Prototipo de la Pi aplicado en la rama `prototipo-17-10` el 2026-10-19 (T14–T16 en [pruebas](docs/pruebas.md)). El código de las clases no cambió salvo lo imprescindible (`leer_robots`, `elegir_robots`, `visualizar`, `avisar`, `ajustar`).
+**Reorganización por niveles (2026-10-17, D23–D25; la web de control se retiró el 2026-10-19, D27):** un script por entregable (`primaria.py`, `tiempo_real.py`, `ensenar.py`) y las clases en `src/librerias/` (`red`, `ur`, `simulador`, `secuencia`); sin `argparse` ni `tareas.py`; rutas relativas a la carpeta de la práctica (`datos/robots.json`, `datos/secuencias/`). Prototipo de la Pi aplicado en la rama `prototipo-17-10` el 2026-10-19 (T14–T16 en [pruebas](docs/pruebas.md)). El código de las clases no cambió salvo lo imprescindible (`leer_robots`, `elegir_robots`, `visualizar`, `ajustar`).
 
-**Portable y URSim (2026-10-19, D26):** `iniciar.bat` + `entorno\` (Python 3.7.5 embebido con las librerías, creado por `herramientas/crear_entorno.ps1`). 223 pruebas OK en Windows con el Python del PC y con el portable; humos con PyBullet real `OK`; `primaria`, `tiempo_real` y `ensenar` probados contra URSim (T17–T20). Dos fallos nuevos documentados: F27 (el servidor web no leía el cuerpo del `POST` antes de responder: Windows reiniciaba la conexión) y F28 (pruebas con tiempos justos para Windows).
+**Portable y URSim (2026-10-19, D26):** `iniciar.bat` + `entorno\` (Python 3.7.5 embebido con las librerías, creado por `herramientas/crear_entorno.ps1`). 223 pruebas OK en Windows con el Python del PC y con el portable; humos con PyBullet real `OK`; `primaria`, `tiempo_real` y `ensenar` probados contra URSim (T17–T20). Fallos documentados: F27 (el servidor web no leía el cuerpo del `POST`; hoy sin web, queda como lección) y F28 (pruebas con tiempos justos para Windows).
 
-**Siguiente:** (1) Josu lee el código nuevo (orden: `red.py` → `ur.py` → `simulador.py` → `secuencia.py` → `primaria.py` → `ensenar.py` → `hmi.py`) y decide las dudas abiertas: ¿`Lock` en `HiloLectorUR`? (el enunciado lo recomienda; hoy solo lo lleva `hmi.py`), ¿`varios.py` aparte por si el profesor lee «un único script» literalmente?, ¿`Secuencia`, el parámetro `visualizador` de `Simulador`?; (2) mirar a ojo la ventana de PyBullet contra URSim (postura y convenio de ángulos) y la web en el navegador (gráfico, tema oscuro, «Ejecutar»); (3) probar el error del robot / parada de protección con URSim y después el UR3e (velocidad 0,1 rad/s, zona despejada, primero solo lectura); (4) pedir la defensa oficial (Josu: el martes 2026-10-20 por la mañana) y ensayar los cambios en caliente sin IA; (5) memoria de máximo 6 páginas: borrador en `docs/memoria-borrador.md` y guía de defensa de la Pi en `docs/desde-pi/defensa-p1.md` (raíz del repo); (6) opcional: gráfico en `primaria.py`/`tiempo_real.py`, trayectoria suave entre puntos (ver «Mejoras posibles» en [arquitectura](docs/arquitectura.md)).
+**Web retirada y Linux (2026-10-19, D27 y D28):** Josu probó `iniciar.bat` y no entendió para qué servía «previsualizar» en la web ni veía que hiciera nada; para la defensa prefiere guardar puntos por consola. Se quitaron `hmi.py`, `hmi.html`, `_estado` y la cola de avisos con hora (`avisar` vuelve a ser `print`); `ensenar` avisa al previsualizar. Se añadió `iniciar.sh` para Linux.
+
+**Siguiente:** (1) Josu lee el código nuevo (orden: `red.py` → `ur.py` → `simulador.py` → `secuencia.py` → `primaria.py` → `ensenar.py`) y decide las dudas abiertas: ¿`Lock` en `HiloLectorUR`? (el enunciado lo recomienda), ¿`varios.py` aparte por si el profesor lee «un único script» literalmente?, ¿`Secuencia`, el parámetro `visualizador` de `Simulador`?; (2) mirar a ojo la ventana de PyBullet contra URSim (postura y convenio de ángulos) y comprobar que el robot 2 sigue al suyo (era la carrera de F29, ya arreglada); (3) probar el error del robot / parada de protección con URSim y después el UR3e (velocidad 0,1 rad/s, zona despejada, primero solo lectura); (4) pedir la defensa oficial (Josu: el martes 2026-10-20 por la mañana) y ensayar los cambios en caliente sin IA; (5) memoria de máximo 6 páginas: borrador en `docs/memoria-borrador.md` y guía de defensa de la Pi en `docs/desde-pi/defensa-p1.md` (raíz del repo); (6) opcional: gráfico en `primaria.py`/`tiempo_real.py`, trayectoria suave entre puntos (ver «Mejoras posibles» en [arquitectura](docs/arquitectura.md)).
 
 ## Documentación de la práctica
 

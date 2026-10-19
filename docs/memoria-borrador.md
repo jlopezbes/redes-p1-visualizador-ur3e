@@ -10,7 +10,7 @@ Nivel al que opto: **sobresaliente** `[JOSU: confirma]`. Python 3.7.5, solo `soc
 |---|---|---|
 | `primaria.py` | Aprobado | Lee 1 o varios robots por la interfaz primaria (30001) y mueve el UR3e de PyBullet |
 | `tiempo_real.py` | Aprobado | Lo mismo por la interfaz de tiempo real (30003) |
-| `ensenar.py` | Sobresaliente | Enseñar puntos, previsualizar, ejecutar con `movej` y supervisar; con una web de control local |
+| `ensenar.py` | Sobresaliente | Enseñar puntos, previsualizar, ejecutar con `movej` y supervisar; desde la consola |
 
 Las IP de los robots están solo en `datos\robots.json`: para pasar de URSim al UR3e se cambia ese fichero, no el código. `primaria.py` y `tiempo_real.py` preguntan cuántos robots visualizar; con 2 se cubre el notable. Las clases están en `src\librerias\`.
 
@@ -33,7 +33,7 @@ Cuatro capas, cada una con una sola responsabilidad: `red.py` (una conexión TCP
 - **Un solo tipo de error de comunicación (`ErrorRed`)**, más `ErrorRedTimeout`, `ErrorSecuencia` y `ErrorSimulador`: el mensaje dice con quién y por qué falló. **Alternativa:** usar `OSError` y excepciones de Python.
 - **Sin `Lock` en `HiloLectorUR`.** Un solo hilo escribe y lo hace **reasignando la lista entera**; el principal la lee una vez en una variable local. **Alternativa (la del enunciado):** protegerlo con `threading.Lock`. Admito que no es lo recomendado; es correcto por cómo se escribe `q` `[JOSU: decide si lo dejas o añades el Lock]`.
 - **Un script por nivel, rutas relativas y sin `argparse`.** Cada entregable se ejecuta por separado, sin argumentos, y funciona desde cualquier carpeta y PC. **Alternativa:** un `main.py` con subcomandos (lo que había).
-- **Una web de control** (servidor `http.server` de la biblioteca estándar, sin instalar nada) que muestra el estado, las alarmas y un gráfico de las articulaciones, y manda las mismas órdenes que la consola. Está fuera del enunciado. **Alternativas:** `pygame` (hay que instalarlo) o `tkinter` (ocupa el hilo principal, que es de PyBullet). Como manda órdenes a un robot, solo escucha en `127.0.0.1` y exige un token.
+- **Una web de control** se probó y se **retiró** (D27): no aportaba al enunciado y no se podía defender línea a línea con el robot delante; `ensenar` se maneja por consola.
 - **No hecho, por alcance:** trayectoria suave entre puntos (`movej` con radio de empalme o `speedj`; hoy el robot se para en cada punto), RTDE y gráfico en los scripts de visualización.
 
 ## 4. Respuestas a las preguntas del enunciado
@@ -57,4 +57,4 @@ Cuatro capas, cada una con una sola responsabilidad: `red.py` (una conexión TCP
 
 ## 6. Uso de la IA
 
-El régimen de la asignatura permite la IA y la promueve. `[JOSU: tu versión honesta: qué generó Claude Code (código de comunicación a partir del enunciado), qué decidiste y corregiste tú (la limpieza y sus criterios, la estructura por scripts, la web), cómo comprobaste que entendías cada línea (lectura, cambios en caliente sin IA, depuración de fallos) y qué probaste tú con el robot]`.
+El régimen de la asignatura permite la IA y la promueve. `[JOSU: tu versión honesta: qué generó Claude Code (código de comunicación a partir del enunciado), qué decidiste y corregiste tú (la limpieza y sus criterios, la estructura por scripts, la retirada de la web), cómo comprobaste que entendías cada línea (lectura, cambios en caliente sin IA, depuración de fallos) y qué probaste tú con el robot]`.
