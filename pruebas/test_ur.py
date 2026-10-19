@@ -6,9 +6,14 @@ tiempo real) y HiloLectorUR contra un servidor local. No necesita robot.
 """
 import contextlib
 import io
+import ipaddress
+import json
+import os
 import struct
+import tempfile
 import time
 import unittest
+from unittest import mock
 
 import ayudas
 import ur
@@ -380,6 +385,109 @@ class PruebasHilo(unittest.TestCase):
         hilo.start()
         self.assertTrue(self.esperar(lambda: hilo.q is not None))
         self.assertIsNone(hilo.ultimo_error)
+
+
+class PruebasRobots(unittest.TestCase):
+    """leer_robots (robots.json -> {nombre: ip}) y elegir_robots (cuantos se visualizan)."""
+
+    def setUp(self):
+        temporal = tempfile.TemporaryDirectory()
+        self.addCleanup(temporal.cleanup)
+        self.dir = temporal.name
+
+    def escribir(self, contenido, codificacion="utf-8"):
+        ruta = os.path.join(self.dir, "robots.json")
+        with open(ruta, "w", encoding=codificacion) as f:
+            f.write(contenido)
+        return ruta
+
+    # ---- leer_robots ----
+    def test_devuelve_nombre_ip_en_el_orden_del_fichero(self):
+        ruta = self.escribir(json.dumps([{"nombre": "z", "ip": "1.1.1.1"}, {"nombre": "a", "ip": "2.2.2.2"},
+                                         {"nombre": "m", "ip": "3.3.3.3"}]))
+        robots = ur.leer_robots(ruta)
+        self.assertEqual(robots, {"z": "1.1.1.1", "a": "2.2.2.2", "m": "3.3.3.3"})
+        self.assertEqual(list(robots), ["z", "a", "m"])
+
+    def test_tolera_el_bom_del_bloc_de_notas(self):
+        ruta = self.escribir(json.dumps([{"nombre": "a", "ip": "1.2.3.4"}]), "utf-8-sig")
+        with open(ruta, "rb") as f:
+            self.assertEqual(f.read(3), b"\xef\xbb\xbf")              # el BOM esta de verdad en el fichero
+        self.assertEqual(ur.leer_robots(ruta), {"a": "1.2.3.4"})
+
+    def test_los_campos_sobrantes_se_ignoran(self):
+        ruta = self.escribir(json.dumps([{"nombre": "a", "ip": "1.2.3.4", "puerto": 1}]))
+        self.assertEqual(ur.leer_robots(ruta), {"a": "1.2.3.4"})
+
+    def test_robots_json_malo_da_valueerror_diciendo_el_fichero(self):
+        casos = {"JSON roto": "[{", "vacio": "", "lista vacia": "[]", "falta ip": json.dumps([{"nombre": "a"}]),
+                 "falta nombre": json.dumps([{"ip": "1.2.3.4"}]), "no es lista": '{"nombre": "a", "ip": "1.2.3.4"}',
+                 "no son objetos": "[1, 2]", "lista de listas": '[["a", "1.2.3.4"]]'}
+        for nombre, contenido in casos.items():
+            with self.subTest(nombre):
+                ruta = self.escribir(contenido)
+                with self.assertRaises(ValueError) as e:
+                    ur.leer_robots(ruta)
+                self.assertIn(ruta, str(e.exception))
+
+    def test_fichero_inexistente_da_valueerror_diciendo_la_ruta(self):
+        ruta = os.path.join(self.dir, "no_existe.json")
+        with self.assertRaises(ValueError) as e:
+            ur.leer_robots(ruta)
+        self.assertIn(ruta, str(e.exception))
+
+    def test_el_robots_json_real_de_la_practica_es_valido(self):
+        # Solo que cargue y tenga IP literales: las IP concretas las cambia Josu segun los robots que use.
+        ruta = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "datos", "robots.json")
+        robots = ur.leer_robots(ruta)
+        self.assertGreaterEqual(len(robots), 1)
+        for nombre, ip in robots.items():
+            with self.subTest(nombre):
+                ipaddress.ip_address(ip)                                # ValueError si no es una IP literal
+
+    # ---- elegir_robots ----
+    ROBOTS = {"r1": "10.0.0.1", "r2": "10.0.0.2", "r3": "10.0.0.3"}
+
+    def elegir(self, robots, *respuestas):
+        """Devuelve (resultado, mock de input, salida) con input() contestando `respuestas` en orden."""
+        salida = io.StringIO()
+        with mock.patch("builtins.input", side_effect=list(respuestas)) as entrada, \
+                contextlib.redirect_stdout(salida):
+            resultado = ur.elegir_robots(robots)
+        return resultado, entrada, salida.getvalue()
+
+    def test_con_un_solo_robot_no_pregunta(self):
+        resultado, entrada, _ = self.elegir({"solo": "10.0.0.9"})
+        self.assertEqual(resultado, {"solo": "10.0.0.9"})
+        entrada.assert_not_called()
+
+    def test_elige_los_primeros_en_orden(self):
+        resultado, _, _ = self.elegir(self.ROBOTS, "2")
+        self.assertEqual(list(resultado.items()), [("r1", "10.0.0.1"), ("r2", "10.0.0.2")])
+        resultado, _, _ = self.elegir(self.ROBOTS, "3")
+        self.assertEqual(list(resultado), ["r1", "r2", "r3"])
+
+    def test_intro_es_un_robot(self):
+        resultado, entrada, _ = self.elegir(self.ROBOTS, "")
+        self.assertEqual(resultado, {"r1": "10.0.0.1"})
+        self.assertEqual(entrada.call_count, 1)
+
+    def test_respuesta_invalida_vuelve_a_preguntar_y_lo_dice(self):
+        for invalida in ("0", "4", "x", "-1"):
+            with self.subTest(invalida):
+                resultado, entrada, salida = self.elegir(self.ROBOTS, invalida, "2")
+                self.assertEqual(list(resultado), ["r1", "r2"])
+                self.assertEqual(entrada.call_count, 2)
+                self.assertIn("Escribe un numero entre 1 y 3", salida)
+
+    def test_entrada_cerrada_da_un_robot(self):
+        resultado, _, _ = self.elegir(self.ROBOTS, EOFError)
+        self.assertEqual(resultado, {"r1": "10.0.0.1"})
+
+    def test_no_modifica_el_diccionario_de_entrada(self):
+        robots = dict(self.ROBOTS)
+        self.elegir(robots, "2")
+        self.assertEqual(robots, self.ROBOTS)
 
 
 if __name__ == "__main__":

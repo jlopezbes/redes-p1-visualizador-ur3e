@@ -1,13 +1,22 @@
 """
-Prueba de humo de extremo a extremo: lanza src\\main.py de verdad (con la ventana REAL de PyBullet) contra
-robots falsos de pruebas/robot_falso.py y comprueba lo que imprime. Abre una ventana de PyBullet unos 4 s por orden.
+Prueba de humo de extremo a extremo: lanza src\\primaria.py, src\\tiempo_real.py y src\\ensenar.py de verdad (con la ventana
+REAL de PyBullet) contra robots falsos de pruebas/robot_falso.py y comprueba lo que imprimen, y la web de ensenar.py por
+HTTP. Abre una ventana de PyBullet unos 4 s por script.
 Envia movej solo al ROBOT FALSO (puertos 31xxx), nunca a URSim ni a un robot.
 
     python -u 2_practicas\\Practica1_visualizador_UR3e\\pruebas\\humo_extremo_a_extremo.py
+
+Los scripts no tienen argumentos y el JSON de robots no lleva puertos, asi que cada script se arranca con un lanzador:
+cambia el puerto de ur.py y las rutas de datos/ del script (ROBOTS, SECUENCIAS) y no abre el navegador. El resto es el script tal cual.
 """
+import http.client
+import json
+import math
 import os
+import re
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
@@ -15,8 +24,31 @@ import ayudas
 from robot_falso import Q_INICIAL, RobotFalso
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
-MAIN = os.path.join(AQUI, "..", "src", "main.py")
+SRC = os.path.normpath(os.path.join(AQUI, "..", "src"))
 FALLOS = []
+
+LANZADOR = """
+import importlib.util, os, sys
+src, script, puerto, robots, secuencias = sys.argv[1:6]
+sys.path.insert(0, os.path.join(src, "librerias"))
+import ur
+ur.PUERTO_PRIMARIA = ur.PUERTO_TIEMPO_REAL = int(puerto)
+import webbrowser
+webbrowser.open = lambda *a, **k: False
+spec = importlib.util.spec_from_file_location(script, os.path.join(src, script + ".py"))
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)          # no ejecuta el bloque __main__ del script
+m.ROBOTS = robots
+if hasattr(m, "SECUENCIAS"):
+    m.SECUENCIAS = secuencias
+try:
+    m.main()
+except KeyboardInterrupt:
+    pass
+except (ValueError, m.ErrorSimulador) as e:
+    print("Error: {}".format(e), file=sys.stderr)
+    sys.exit(1)
+"""
 
 
 def comprobar(condicion, texto):
@@ -25,18 +57,11 @@ def comprobar(condicion, texto):
         FALLOS.append(texto)
 
 
-def lanzar(*argumentos, puerto_primaria=None):
-    """Arranca main.py y recoge su salida en una lista desde un hilo. Con `puerto_primaria`, cambia ese puerto
-    en el proceso (el JSON de robots no lleva puertos: siempre usa el de la primaria)."""
-    if puerto_primaria is None:
-        comando = [sys.executable, "-B", "-u", MAIN] + list(argumentos)
-    else:
-        codigo = ("import sys; sys.path.insert(0, {src!r}); import ur; ur.PUERTO_PRIMARIA = {puerto}; "
-                  "import main; sys.argv = ['main.py'] + {args!r}; main.main()").format(
-                      src=os.path.dirname(os.path.abspath(MAIN)), puerto=puerto_primaria, args=list(argumentos))
-        comando = [sys.executable, "-B", "-u", "-c", codigo]
-    proceso = subprocess.Popen(comando, stdin=subprocess.PIPE,
-                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, bufsize=1)
+def lanzar(script, puerto, robots, secuencias=""):
+    """Arranca un script de src/ y recoge su salida en una lista desde un hilo."""
+    proceso = subprocess.Popen([sys.executable, "-B", "-u", "-c", LANZADOR, SRC, script, str(puerto), robots, secuencias],
+                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                               universal_newlines=True, bufsize=1)
     lineas = []
 
     def leer():
@@ -44,6 +69,23 @@ def lanzar(*argumentos, puerto_primaria=None):
             lineas.append(linea.rstrip())       # tambien entra el ruido de PyBullet (b3Printf...): no importa
     threading.Thread(target=leer, daemon=True).start()
     return proceso, lineas
+
+
+def escribir(proceso, texto, espera=0.0):
+    proceso.stdin.write(texto + "\n")
+    proceso.stdin.flush()
+    time.sleep(espera)
+
+
+def esperar(lineas, condicion, limite=40.0):
+    """Espera (hasta `limite` s) a que alguna linea de la salida cumpla `condicion`. Devuelve si aparecio.
+    Asi la prueba no depende de lo rapido que arranque Python o PyBullet en cada PC."""
+    t0 = time.time()
+    while time.time() - t0 < limite:
+        if any(condicion(l) for l in list(lineas)):
+            return True
+        time.sleep(0.2)
+    return False
 
 
 def terminar(proceso):
@@ -55,71 +97,119 @@ def terminar(proceso):
 
 
 def grados(q):
-    import math
     return [round(math.degrees(a), 1) for a in q]
 
 
-def prueba_lectura(nombre, orden, formato):
-    print(nombre)
+def escribir_robots(carpeta, robots):
+    ruta = os.path.join(carpeta, "robots.json")
+    with open(ruta, "w") as f:
+        json.dump([{"nombre": n, "ip": ip} for n, ip in robots], f)
+    return ruta
+
+
+def prueba_lectura(nombre, script, formato):
+    print(nombre + " (1 robot: no pregunta cuantos)")
     fake = RobotFalso(ayudas.puerto_libre(), formato).iniciar()
-    proceso, lineas = lanzar(orden, "--ip", "127.0.0.1", "--puerto", str(fake.puerto))
-    time.sleep(5)
-    terminar(proceso)
+    with tempfile.TemporaryDirectory() as d:
+        proceso, lineas = lanzar(script, fake.puerto, escribir_robots(d, [("robot1", "127.0.0.1")]))
+        esperado = "q (grados): " + str(grados(Q_INICIAL))
+        esperar(lineas, lambda l: "[robot1]" in l and esperado in l)
+        terminar(proceso)
     fake.parar()
-    esperado = "q (grados): " + str(grados(Q_INICIAL))
-    comprobar(any(esperado in l for l in lineas), "imprime {}".format(esperado))
+    comprobar(any("[robot1]" in l and esperado in l for l in lineas), "imprime {}".format(esperado))
     comprobar(not any("Traceback" in l for l in lineas), "sin Traceback")
     if not any(esperado in l for l in lineas):
         print("    salida:", [l for l in lineas if l and "b3Printf" not in l][-10:])
 
 
-def prueba_varios():
-    print("varios (2 robots con distinta IP de loopback y el mismo puerto)")
+def prueba_dos_robots(nombre, script, formato):
+    print(nombre + " (2 robots con distinta IP de loopback y el mismo puerto; responde 2 a la pregunta)")
     puerto = ayudas.puerto_libre()
-    f1 = RobotFalso(puerto).iniciar()
-    f2 = RobotFalso(puerto, q=[0.1, -1.0, 0.0, -1.0, 0.0, 0.0], ip="127.0.0.2").iniciar()
-    import json
-    import tempfile
+    q2 = [0.1, -1.0, 0.0, -1.0, 0.0, 0.0]
+    f1 = RobotFalso(puerto, formato).iniciar()
+    f2 = RobotFalso(puerto, formato, q=q2, ip="127.0.0.2").iniciar()
     with tempfile.TemporaryDirectory() as d:
-        ruta = os.path.join(d, "robots.json")
-        with open(ruta, "w") as f:
-            json.dump([{"nombre": "r1", "ip": "127.0.0.1"}, {"nombre": "r2", "ip": "127.0.0.2"}], f)
-        proceso, lineas = lanzar("varios", "--config", ruta, puerto_primaria=puerto)
-        time.sleep(5)
+        proceso, lineas = lanzar(script, puerto, escribir_robots(d, [("r1", "127.0.0.1"), ("r2", "127.0.0.2")]))
+        esperar(lineas, lambda l: "Robots a visualizar" in l)
+        escribir(proceso, "2")
+        esperar(lineas, lambda l: "[r1]" in l and str(grados(Q_INICIAL)) in l)
+        esperar(lineas, lambda l: "[r2]" in l and str(grados(q2)) in l)
         terminar(proceso)
     f1.parar()
     f2.parar()
+    comprobar(any("Robots a visualizar" in l for l in lineas), "pregunta cuantos robots")
     comprobar(any("[r1]" in l and str(grados(Q_INICIAL)) in l for l in lineas), "r1 imprime su q")
-    comprobar(any("[r2]" in l and str(grados([0.1, -1.0, 0.0, -1.0, 0.0, 0.0])) in l for l in lineas), "r2 imprime su q")
+    comprobar(any("[r2]" in l and str(grados(q2)) in l for l in lineas), "r2 imprime su q")
     comprobar(not any("Traceback" in l for l in lineas), "sin Traceback")
 
 
+def http_json(url, metodo="GET", cuerpo=None, token=None, host=None):
+    """Una peticion a la web de ensenar.py: devuelve (codigo, json o texto)."""
+    base, _, _ = url.partition("/?t=")
+    anfitrion = base.replace("http://", "")
+    conexion = http.client.HTTPConnection(anfitrion, timeout=5)
+    ruta = ("/estado" if metodo == "GET" else "/orden") + "?t=" + (token if token is not None else url.split("?t=")[1])
+    cabeceras = {"Content-Type": "application/json"} if cuerpo is not None else {}
+    if host:
+        cabeceras["Host"] = host
+    conexion.request(metodo, ruta, json.dumps(cuerpo) if cuerpo is not None else None, cabeceras)
+    respuesta = conexion.getresponse()
+    datos = respuesta.read().decode("utf-8")
+    conexion.close()
+    try:
+        return respuesta.status, json.loads(datos)
+    except ValueError:
+        return respuesta.status, datos
+
+
 def prueba_ensenar():
-    print("ensenar (g, s, l, v, e, q) con velocidad 0,3 rad/s")
+    print("ensenar (consola: ajustar, g, l, v, e, q; web: estado y ordenes por HTTP)")
     fake = RobotFalso(ayudas.puerto_libre()).iniciar()
     destino = [Q_INICIAL[0] + 0.2] + Q_INICIAL[1:]
-    import json
-    import tempfile
     with tempfile.TemporaryDirectory() as d:
-        ruta = os.path.join(d, "puntos.json")
-        with open(ruta, "w") as f:
+        secuencias = os.path.join(d, "secuencias")
+        os.makedirs(secuencias)
+        with open(os.path.join(secuencias, "puntos.json"), "w") as f:
             json.dump([destino], f)
-        proceso, lineas = lanzar("ensenar", "--ip", "127.0.0.1", "--puerto", str(fake.puerto), "--v", "0.3", "--a", "0.5")
+        proceso, lineas = lanzar("ensenar", fake.puerto, escribir_robots(d, [("robot1", "127.0.0.1")]), secuencias)
+        esperar(lineas, lambda l: l.startswith("Conectado a"))
 
-        def escribir(texto, espera):
-            proceso.stdin.write(texto + "\n")
-            proceso.stdin.flush()
-            time.sleep(espera)
+        # la web: URL con token que imprime el programa
+        url = next((m.group(1) for l in lineas for m in [re.search(r"Web de control: (\S+)", l)] if m), None)
+        comprobar(url is not None, "el programa imprime la URL de la web de control")
+        if url:
+            for _ in range(200):                                       # hasta que llegue el primer estado del robot
+                codigo, estado = http_json(url)
+                if codigo == 200 and estado.get("conectado") is True and estado.get("q"):
+                    break
+                time.sleep(0.2)
+            comprobar(codigo == 200 and estado.get("conectado") is True and len(estado.get("q") or []) == 6,
+                      "GET /estado: conectado y con los 6 q")
+            comprobar(http_json(url, token="mal")[0] == 403, "sin el token correcto la web responde 403")
+            comprobar(http_json(url, host="evil.com")[0] == 403, "con otra cabecera Host la web responde 403")
+            comprobar(http_json(url, "POST", {"linea": "g"})[0] == 200, "POST /orden g: aceptada")
+            esperar(lineas, lambda l: "Punto 1 guardado" in l)
+            time.sleep(0.5)
+            comprobar(len(http_json(url)[1]["puntos"]) == 1, "la orden de la web guarda un punto")
+            http_json(url, "POST", {"linea": "b"})                       # b: borra, para seguir como antes
+            esperar(lineas, lambda l: "Secuencia borrada" in l)
 
-        time.sleep(3)
-        escribir("g", 0.5)                      # guarda el punto actual
-        escribir("l " + ruta, 0.5)              # carga una secuencia de 1 punto (reemplaza)
-        escribir("v", 2)                        # previsualiza (1 s)
-        escribir("e", 4)                        # ejecuta: 0,2 rad a 0,3 rad/s ~ 0,7 s
-        escribir("q", 1)
+        escribir(proceso, "ajustar 0.5 0.5")                     # por encima del limite de 0,3 rad/s: no cambia
+        esperar(lineas, lambda l: "No se cambia" in l)
+        escribir(proceso, "ajustar 0.3 0.5")                     # el limite exacto
+        esperar(lineas, lambda l: l.startswith("Velocidad 0.3"))
+        escribir(proceso, "g")                                   # guarda el punto actual
+        esperar(lineas, lambda l: l == "Punto 1 guardado" and lineas.count(l) >= 2)       # la segunda vez (la 1.a fue por la web)
+        escribir(proceso, "l puntos")                            # carga una secuencia de 1 punto (reemplaza)
+        esperar(lineas, lambda l: "1 puntos cargados" in l)
+        escribir(proceso, "v", 2)                                # previsualiza (1 s)
+        escribir(proceso, "e")                                   # ejecuta: 0,2 rad a 0,3 rad/s ~ 0,7 s
+        esperar(lineas, lambda l: "Secuencia terminada" in l)
+        escribir(proceso, "q", 1.5)
         terminar(proceso)
     ordenes = [o for o in fake.ordenes if o.startswith("movej(")]
     fake.parar()
+    comprobar(any("No se cambia" in l for l in lineas), "ajustar 0.5 0.5 se rechaza y avisa (limite 0,3 rad/s)")
     comprobar(any("Punto 1 guardado" in l for l in lineas), "g guarda el punto")
     comprobar(any("1 puntos cargados" in l for l in lineas), "l carga la secuencia")
     comprobar(any("Punto 1/1 enviado" in l for l in lineas), "e envia el punto")
@@ -131,18 +221,29 @@ def prueba_ensenar():
         print("    salida:", [l for l in lineas if l and "b3Printf" not in l][-15:])
 
 
-def prueba_velocidad_excesiva():
-    print("ensenar --v 0.5 (por encima del limite) se rechaza al arrancar")
-    proceso, lineas = lanzar("ensenar", "--v", "0.5")
-    proceso.wait(10)
-    comprobar(proceso.returncode == 2, "main.py termina con codigo 2 (error de argumentos)")
+def prueba_robots_json_malo():
+    print("robots.json malo: el programa explica el error y sale con codigo 1 sin abrir la ventana")
+    with tempfile.TemporaryDirectory() as d:
+        ruta = os.path.join(d, "robots.json")
+        with open(ruta, "w") as f:
+            f.write("[]")
+        for script in ("primaria", "tiempo_real", "ensenar"):
+            proceso, lineas = lanzar(script, 30001, ruta)
+            try:
+                proceso.wait(40)
+            except subprocess.TimeoutExpired:
+                terminar(proceso)
+            esperar(lineas, lambda l: "Error:" in l, 10)     # el hilo que recoge la salida puede ir por detras
+            comprobar(proceso.returncode == 1 and any("Error:" in l for l in lineas),
+                      "{}.py termina con codigo 1 y explica el error".format(script))
 
 
 if __name__ == "__main__":
     prueba_lectura("primaria", "primaria", "primaria")
-    prueba_lectura("tiempo-real", "tiempo-real", "tiempo_real")
-    prueba_varios()
+    prueba_lectura("tiempo_real", "tiempo_real", "tiempo_real")
+    prueba_dos_robots("primaria", "primaria", "primaria")
+    prueba_dos_robots("tiempo_real", "tiempo_real", "tiempo_real")
     prueba_ensenar()
-    prueba_velocidad_excesiva()
+    prueba_robots_json_malo()
     print("FALLOS: {}".format(FALLOS) if FALLOS else "TODO OK")
     sys.exit(1 if FALLOS else 0)

@@ -10,7 +10,7 @@ robot1 en el origen y robot2 a 1 m en x.
 import sys
 import time
 
-import ayudas  # noqa: F401  (pone src/ en sys.path)
+import ayudas  # noqa: F401  (pone src/ y src/librerias/ en sys.path)
 import pybullet
 from simulador import Simulador
 

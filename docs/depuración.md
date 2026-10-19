@@ -2,7 +2,7 @@
 
 El profesor valora sobre todo saber depurar: cada fallo real queda como caso. Numeración fija F1, F2… con el más reciente arriba.
 
-Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F6 es de la fase 1 de `src/`; F7–F10 son de la revisión de robustez de la capa 1 (`red.py`) y F11–F14 de la capa 2 (`ur.py`) F15–F19 de la capa 3 (`secuencia.py`, `simulador.py`) F20 de la capa 4 (`main.py`, `tareas.py`) y F21 de la ejecución real con ventana tras las cuatro capas. **F22–F24 son de la limpieza por capas (2026-10-16).** Cada uno dice qué se ejecutó y qué solo se leyó.
+Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F6 es de la fase 1 de `src/`; F7–F10 son de la revisión de robustez de la capa 1 (`red.py`) y F11–F14 de la capa 2 (`ur.py`) F15–F19 de la capa 3 (`secuencia.py`, `simulador.py`) F20 de la capa 4 (`main.py`, `tareas.py`) y F21 de la ejecución real con ventana tras las cuatro capas. **F25–F26 son de la web de control (2026-10-17).** **F22–F24 son de la limpieza por capas (2026-10-16).** Cada uno dice qué se ejecutó y qué solo se leyó.
 
 **Qué casos describen código que la limpieza (D17–D21) ya cambió.** Se conservan como historia y como lección; el fallo que explican ya no puede ocurrir o se evita de otra forma:
 
@@ -18,6 +18,22 @@ Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F
 | F18, F19 | sin topes de fichero ni guardado atómico; el simulador no valida `q` ni posiciones |
 | F20 | `with Simulador()` → `try/finally`; el resto vale |
 | F21 | sigue valiendo (la consola se lee después de abrir la ventana) |
+
+## F26 – Al salir de `ensenar` con `q`, Python 3.11 aborta con «Fatal Python error» por el hilo de la consola (2026-10-17, `src/ensenar.py`)
+
+- **Síntoma:** al ejecutar `ensenar.py` con la entrada por tubería (el humo) y escribir `q`, el programa termina bien y luego imprime `Fatal Python error: _enter_buffered_busy: could not acquire lock for <_io.BufferedReader name='<stdin>'> at interpreter shutdown, possibly due to daemon threads` y sale con código 134.
+- **Aislamiento:** ✅ ejecutado con un script mínimo de 8 líneas (un hilo `daemon` bloqueado en `input()` y el principal que acaba): da el mismo error. No es de este código nuevo: es el diseño de la consola (un hilo `daemon` con `input()`) que ya tenía la versión anterior.
+- **Causa:** el hilo demonio sigue dentro de `input()`, con el candado de `stdin`, cuando el intérprete se cierra.
+- **Arreglo:** ninguno. Cuando ocurre, el robot ya se ha frenado, el socket y la web ya se han cerrado y la ventana ya no existe (están en el `finally`); solo cambia el código de salida. En Python 3.7.5 con consola de Windows **no se ha observado ni comprobado**. El humo ya no exige código 0 para `q`.
+- **Lección:** lo que se vea al cerrar no tiene por qué ser del programa; y un `input()` en un hilo demonio no se puede interrumpir de forma portable. Si molestara: `os._exit(0)` tras el `finally`, a costa de saltarse el cierre normal.
+
+## F25 – La web salía vacía unos instantes al abrirse, y una captura la pilló así (2026-10-17, `src/librerias/hmi.html`)
+
+- **Síntoma:** al cargar la página, todo mostraba «—» y los botones estaban activos hasta que llegaba la primera respuesta de `/estado`; una captura automática de pantalla salió completamente vacía.
+- **Aislamiento:** ✅ ejecutado (Firefox sin cabeza contra `ensenar.py` con un robot falso, dos capturas seguidas: la primera con datos y la segunda vacía). Es una carrera: la captura se hace al terminar de cargar, y `fetch` es asíncrono.
+- **Causa:** la página pintaba solo con lo que pedía después de cargar. Además, con el estado sin recibir, `b-e` habría leído `est.puntos` de un `null`.
+- **Arreglo:** `GET /` incrusta el primer estado en la propia página (en un `<script type="application/json">` con `<` escapado como `\u003c`) y los botones nacen con `disabled`. Hay una prueba del escape.
+- **Lección:** una vista que depende de una petición posterior parpadea vacía; y el texto que viene del robot nunca va a HTML sin escapar.
 
 ## F24 – Las pruebas nuevas fallaban por cómo es Windows y por un cliente falso mal pensado, no por el código (2026-10-16, `pruebas/`)
 

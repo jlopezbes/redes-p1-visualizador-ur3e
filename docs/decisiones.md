@@ -2,7 +2,7 @@
 
 Numeración fija: D1, D2… (nunca se renumera). Cada una lleva contexto, opciones, la elegida y por qué, y la marca **«distinto»** si se aparta de lo que pide el enunciado o de lo que haría la clase: esas son la materia prima de la memoria.
 
-D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14. D6–D9 son de esa misma sesión (fase 1: código escrito por la IA, pendiente de revisión de Josu). D10–D11 son de la revisión de robustez de la capa 1 (`red.py`) D12–D13 de la capa 2 (`ur.py`) D14–D15 de la capa 3 (`secuencia.py`, `simulador.py`) y D16 de la capa 4 (`main.py`, `tareas.py`). **D17–D21 son de la limpieza por capas (2026-10-15/16)**, que simplificó parte de lo anterior: las decisiones afectadas llevan una línea **«Hoy»** que dice qué sigue valiendo. El texto original se conserva como historia.
+D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14. D6–D9 son de esa misma sesión (fase 1: código escrito por la IA, pendiente de revisión de Josu). D10–D11 son de la revisión de robustez de la capa 1 (`red.py`) D12–D13 de la capa 2 (`ur.py`) D14–D15 de la capa 3 (`secuencia.py`, `simulador.py`) y D16 de la capa 4 (`main.py`, `tareas.py`). **D23–D25 son de la reorganización por niveles y la web de control (2026-10-17)**. **D17–D21 son de la limpieza por capas (2026-10-15/16)**, que simplificó parte de lo anterior: las decisiones afectadas llevan una línea **«Hoy»** que dice qué sigue valiendo. El texto original se conserva como historia.
 
 ## D1 – Un solo módulo de protocolo, reutilizado por todos los scripts
 
@@ -70,6 +70,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Elegida:** (b). **Porque** la máquina de estados de enseñar y reproducir (≈ 100 líneas con estado propio) no cabe como «función» sin volverse ilegible, y las dos interfaces del UR (30001 y 30003) comparten la conexión y el buffer y solo se diferencian en cómo cortan un paquete. `secuencia.py` no abre sockets ni ventanas: recibe el robot y los mensajes.
 - **Distinto:** sí, respecto al reparto que pidió Josu: dos piezas más (`ClienteUR` y `secuencia.py`). Para revisar.
 - **Hoy (D18):** `ClienteUR` es una clase única para las dos interfaces (ya no hay base ni subclases `UrPrimaria`/`UrTiempoReal`) y decodifica los mensajes antes de entregarlos.
+- **Hoy (D23):** `tareas.py` y `main.py` desaparecen: cada script de `src/` (`primaria.py`, `tiempo_real.py`, `ensenar.py`) es su propio punto de entrada y los módulos están en `src/librerias/`. El reparto red / `ur` / `simulador` / `secuencia` sigue igual.
 - **Commit:** `fe2a2de`, `e89e1da`, `800dd7d`
 
 ## D9 – Un robot es «varios robots con uno»
@@ -151,6 +152,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Elegida:** primero se crean los clientes y después el `Simulador` dentro de `with`, así un argumento malo falla antes de abrir la ventana sin escribir más validadores. `main()` traduce a una línea `Error: ...` en stderr: `ValueError`/`OSError` (argumentos, `robots.json`) -> código **2**; `ErrorUR`/`ErrorSimulador`/`ErrorSecuencia` -> **1**; Ctrl+C -> **0** (es la forma normal de parar); un fallo inesperado -> traceback y **1** (último `except Exception` de la aplicación). `ensenar_reproducir` cierra el robot en un `finally`, tras frenarlo si se mueve, en cualquier salida (`q`, Ctrl+C, ventana cerrada, bug); en vez de `time.sleep`, la reconexión espera con `comandos.get(timeout=ur.REINTENTO)`, y un EOF de la consola equivale a `q`. Se rechazan `b`, `l` y `g` con la secuencia parada o en espera.
 - **Distinto:** no.
 - **Hoy (D17, D19):** el `Simulador` va en `try/finally` (sin `with`) y, al salir, el robot se frena **antes** de cerrar la ventana. `main()` captura `ValueError` (2), `ErrorRed` y `ErrorSimulador` (1) y Ctrl+C (0); ya no captura `OSError` ni hay `except Exception` final: un fallo inesperado lo muestra Python con su traceback y código 1.
+- **Hoy (D23):** no hay `main()` único: cada script tiene su propio bloque `if __name__ == "__main__"` con el mismo `try/except`, y los códigos de salida son 0 y 1 (el 2 era de `argparse`).
 - **Commit:** `5150baf`
 
 ## D17 – Limpieza por capas: lo que no aporta se quita y la seguridad con el robot se queda
@@ -207,4 +209,33 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Opciones:** (a) `--ip` obligatorio o por defecto en el código (antes); (b) sin argumentos, el primer robot del JSON; `--robot nombre` elige otro; `--ip` sigue como excepción y ignora el JSON; (c) además, un campo `puerto` opcional en el JSON.
 - **Elegida:** (b). Una función nueva, `tareas.ip_robot(ruta, nombre)`, y `--config` en las cuatro órdenes. `--robot` y `--ip` son excluyentes. `--puerto` sigue siendo el estándar de cada orden (30001 o 30003); (c) queda para si hiciera falta URSim 2 por NAT sin `--puerto`. El nombre del robot elegido es el que sale en las líneas de `visualizar`.
 - **Distinto:** sí, respecto a D21 (donde `--ip` y `--puerto` eran la vía para un solo robot).
+- **Hoy (D23):** sin argumentos: `primaria` y `tiempo_real` preguntan cuántos robots (los primeros N del JSON) y `ensenar` usa el primero. `--robot`, `--ip`, `--puerto` y `--config` ya no existen; el JSON está en `datos/robots.json`.
 - **Commit:** `4f21b21`
+
+## D23 – Un script por nivel, las clases en `src/librerias/`, sin `argparse` y con rutas relativas (2026-10-17)
+
+- **Contexto:** el enunciado pide para el aprobado **«dos scripts separados: `primaria.py` y `tiempo_real.py`»** y, para el notable, «un único script que visualiza varios robots»; el repo tenía un `main.py` con subcomandos y un `tareas.py` que solo existía para que lo llamase `main`. Josu no quería `argparse`, quería saber «qué ejecutar y cómo» y que la práctica funcionase al cambiar de PC.
+- **Opciones:** (a) dejar `main.py` + `tareas.py`; (b) `main.py` con menú de `input` y `tareas.py` dentro; (c) un script por nivel que llama a las clases, con las clases en otra carpeta.
+- **Elegida:** (c). `src/primaria.py`, `src/tiempo_real.py` y `src/ensenar.py`; `src/librerias/` con `red`, `ur`, `simulador`, `secuencia` y `hmi`. `primaria` y `tiempo_real` preguntan con `input` cuántos robots visualizar (1 a N, Intro = 1): con 2 cubren el notable. Se descartó un `varios.py`; si el profesor leyera «un único script» al pie de la letra, serían unas 5 líneas. El bucle `visualizar` pasó a `simulador.py` y `leer_robots`/`elegir_robots` a `ur.py`; la consola, `_comando` y el bucle de enseñar, a `ensenar.py`.
+- **Rutas:** cada script calcula `datos/` y `librerias/` desde `os.path.abspath(__file__)` y `..`, así que da igual desde qué carpeta se lance y en qué PC esté (sin rutas absolutas; hay una prueba que lo comprueba). Los módulos son planos (sin paquete) y el script añade `librerias/` a `sys.path`: tres líneas repetidas en cada script, a cambio de no tocar los `import` de las clases ni de las pruebas.
+- **Se pierde:** `--ip`, `--robot`, `--puerto`, `--config`, `--v` y `--a`. Cambiar de robot es editar `robots.json` (el enunciado lo pide así: «cambiad la IP de destino en el fichero de configuración, sin tocar el código»); la velocidad, una constante de `ensenar.py` o la web (D25). El código de salida 2 desaparece.
+- **Distinto:** sí, respecto a D8 y D22. Cumple la letra del enunciado.
+- **Commit:** pendiente.
+
+## D24 – Una web de control en `localhost` para `ensenar`, con `http.server` y sin dependencias (2026-10-17)
+
+- **Contexto:** la consola de `ensenar` obliga a recordar letras y no enseña el estado ni las alarmas; Josu quería «una especie de HMI» con el estado del robot, registrar puntos, alarmas, velocidad ajustable y el movimiento de cada articulación en un gráfico. El enunciado no lo pide (solo menciona los deslizadores de PyBullet como opción): no sube nota.
+- **Opciones:** (a) ventana con `pygame` o `tkinter`; (b) web servida por el propio programa; (c) Flask u otro framework.
+- **Elegida:** (b), con `http.server.ThreadingHTTPServer` (Python 3.7) en un hilo, una página con CSS y JavaScript sin librerías y el gráfico en `canvas`. **Porque** (a) necesita instalar `pygame` (el PC no deja: F1, F2) o, con `tkinter`, ocupar el hilo principal, que ya es de PyBullet; (c) también exige instalar. La web no cambia la lógica: sus órdenes entran en la misma cola que la consola, y el hilo principal sigue siendo el único que toca robot, simulador y puntos. La consola se conserva como respaldo.
+- **Seguridad:** la web puede mandar `movej`. Solo escucha en `127.0.0.1`, exige un token aleatorio, rechaza una cabecera `Host` ajena y un `POST` que no sea JSON, y limita las órdenes (ver [arquitectura](arquitectura.md), «HMI web»). «Ejecutar» pide confirmación. La seta del pendant sigue siendo la parada real.
+- **Hay `Lock`:** en `hmi.py` el hilo principal publica y los del servidor leen un estado y un historial que crece, así que el `Lock` es lo correcto (a diferencia de `HiloLectorUR.q`, que es una referencia que se reasigna entera, D3).
+- **Distinto:** sí: es un extra fuera del enunciado. Va aislado en `hmi.py` y `hmi.html`: si no se quiere entregar, se quitan esos dos ficheros y las líneas que usan `HMI` en `ensenar.py`.
+- **Commit:** pendiente.
+
+## D25 – Velocidad y aceleración ajustables en marcha, y los avisos se guardan (2026-10-17)
+
+- **Contexto:** sin `--v` y `--a`, la velocidad era una constante; en la defensa el profesor puede pedir otra. Y la web necesita los avisos que antes solo se imprimían.
+- **Elegida:** `Reproductor.ajustar(velocidad, aceleracion)` cambia los valores de los **siguientes** `movej` (no el que está en curso), dentro de los mismos límites de `ur.py` (0,001–0,3 rad/s y 0,001–0,5 rad/s²); fuera de rango no cambia nada y avisa. Se acepta solo con la secuencia libre, como el resto de órdenes. `secuencia.avisar(texto)` sustituye a `print`: imprime igual y guarda los últimos 50 avisos con hora en `secuencia.mensajes`.
+- **No se hace:** escribir los avisos en un fichero (el enunciado no lo pide; serían 3 líneas).
+- **Distinto:** no.
+- **Commit:** pendiente.

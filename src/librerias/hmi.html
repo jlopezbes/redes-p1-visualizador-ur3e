@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UR3e · Enseñar y reproducir</title>
+<style>
+  /* Paleta categórica validada (dataviz): 6 articulaciones = 6 primeras posiciones, en orden. */
+  :root {
+    color-scheme: light;
+    --pagina: #f9f9f7;   --superficie: #fcfcfb;
+    --tinta: #0b0b0b;    --tinta-2: #52514e;   --tinta-3: #898781;
+    --rejilla: #e1e0d9;  --eje: #c3c2b7;       --borde: rgba(11,11,11,0.10);
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300;
+    --bien: #0ca30c; --aviso: #fab219; --grave: #ec835a; --critico: #d03b3b;
+    --bien-texto: #006300; --acento: #2a78d6; --acento-texto: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --pagina: #0d0d0d;   --superficie: #1a1a19;
+      --tinta: #f0efec;    --tinta-2: #c3c2b7;   --tinta-3: #898781;
+      --rejilla: #2c2c2a;  --eje: #383835;       --borde: rgba(255,255,255,0.10);
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300;
+      --bien-texto: #0ca30c; --acento: #3987e5;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--pagina); color: var(--tinta);
+         font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 16px;
+           background: var(--superficie); border-bottom: 1px solid var(--borde); }
+  h1 { font-size: 16px; margin: 0 8px 0 0; font-weight: 600; }
+  .estado { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+          border: 1px solid var(--borde); color: var(--tinta-2); background: var(--superficie); white-space: nowrap; }
+  .chip b { color: var(--tinta); font-weight: 600; }
+  .chip.bien b::before { content: "✔ "; color: var(--bien-texto); }
+  .chip.aviso b::before { content: "⚠ "; color: var(--aviso); }
+  .chip.critico b::before { content: "✖ "; color: var(--critico); }
+  .chip.critico { border-color: var(--critico); }
+  #alarma { display: none; margin: 12px 16px 0; padding: 10px 14px; border-radius: 8px; font-weight: 600;
+            border: 1px solid var(--critico); border-left-width: 6px; background: var(--superficie); }
+  #alarma.visible { display: block; }
+  #alarma small { display: block; font-weight: 400; color: var(--tinta-2); }
+  main { display: grid; gap: 12px; padding: 12px 16px 16px; grid-template-columns: 300px minmax(0, 1fr) 390px; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+  section { background: var(--superficie); border: 1px solid var(--borde); border-radius: 10px; padding: 12px 14px; }
+  section h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--tinta-3);
+               margin: 0 0 10px; font-weight: 600; }
+  .col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  button { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--eje);
+           background: var(--superficie); color: var(--tinta); cursor: pointer; }
+  button:hover:not(:disabled) { background: var(--rejilla); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+  button.primario { background: var(--acento); border-color: var(--acento); color: var(--acento-texto); font-weight: 600; }
+  button.primario:hover:not(:disabled) { filter: brightness(1.08); background: var(--acento); }
+  button.parar { background: var(--critico); border-color: var(--critico); color: #fff; font-weight: 700; font-size: 15px; }
+  button.parar:hover:not(:disabled) { background: var(--critico); filter: brightness(1.1); }
+  .botones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .botones .ancho { grid-column: 1 / -1; }
+  label { display: block; color: var(--tinta-2); margin: 8px 0 2px; }
+  input[type=number], input[type=text], select { width: 100%; font: inherit; padding: 6px 8px; border-radius: 6px;
+           border: 1px solid var(--eje); background: var(--superficie); color: var(--tinta); }
+  input[type=range] { width: 100%; accent-color: var(--acento); }
+  .nota { color: var(--tinta-3); font-size: 12px; margin-top: 6px; }
+  .fila { display: flex; gap: 8px; align-items: center; } .fila > * { flex: 1; }
+  /* gráfico */
+  .grafico-cab { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 8px; flex-wrap: wrap; }
+  .grafico-cab h2 { margin: 0; }
+  .ventanas button { padding: 3px 10px; border-radius: 6px; }
+  .ventanas button[aria-pressed=true] { background: var(--rejilla); border-color: var(--tinta-3); font-weight: 600; }
+  #caja { position: relative; height: 380px; }
+  #grafico { width: 100%; height: 100%; display: block; touch-action: none; }
+  #tip { position: absolute; display: none; pointer-events: none; padding: 8px 10px; border-radius: 8px; min-width: 190px;
+         background: var(--superficie); border: 1px solid var(--eje); box-shadow: 0 4px 14px rgba(0,0,0,.15); font-size: 12px; }
+  #tip .t { color: var(--tinta-3); margin-bottom: 4px; }
+  #tip .f { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+  #tip .f span:first-child { color: var(--tinta-2); display: flex; align-items: center; gap: 6px; }
+  #tip .f b { color: var(--tinta); font-variant-numeric: tabular-nums; }
+  .clave { display: inline-block; width: 14px; height: 0; border-top: 2px solid; border-radius: 2px; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--rejilla); }
+  th { color: var(--tinta-3); font-weight: 500; font-size: 12px; }
+  th:first-child, td:first-child { text-align: left; }
+  tr.activa td { background: var(--rejilla); font-weight: 600; }
+  tr.apagada td { opacity: .45; }
+  .leyenda-fila { cursor: pointer; user-select: none; }
+  .leyenda-fila:focus-visible { outline: 2px solid var(--acento); }
+  #mensajes { height: 230px; overflow-y: auto; font: 12px/1.45 ui-monospace, "Cascadia Mono", Consolas, monospace;
+              background: var(--pagina); border-radius: 6px; padding: 8px; border: 1px solid var(--rejilla); }
+  #mensajes div { white-space: pre-wrap; word-break: break-word; }
+  #mensajes .mal { color: var(--critico); font-weight: 600; }
+  body.sin-datos main { opacity: .6; }
+</style>
+</head>
+<body>
+<header>
+  <h1>UR3e · Enseñar y reproducir</h1>
+  <div class="estado">
+    <span class="chip" id="c-robot">Robot: <b id="v-robot">—</b></span>
+    <span class="chip" id="c-conexion">Conexión: <b id="v-conexion">—</b></span>
+    <span class="chip" id="c-modo">Modo: <b id="v-modo">—</b></span>
+    <span class="chip" id="c-programa">Programa: <b id="v-programa">—</b></span>
+    <span class="chip" id="c-proteccion">Protección: <b id="v-proteccion">—</b></span>
+    <span class="chip" id="c-emergencia">Emergencia: <b id="v-emergencia">—</b></span>
+    <span class="chip" id="c-fase">Secuencia: <b id="v-fase">—</b></span>
+  </div>
+</header>
+<div id="alarma" role="alert"><span id="alarma-titulo"></span><small id="alarma-detalle"></small></div>
+
+<main>
+  <div class="col">
+    <section aria-label="Secuencia">
+      <h2>Secuencia</h2>
+      <div class="botones">
+        <button id="b-g" disabled class="primario ancho" title="Guarda la posición actual del robot como punto">Guardar punto</button>
+        <button id="b-v" disabled title="Mueve solo el robot simulado por los puntos">Previsualizar</button>
+        <button id="b-e" disabled title="Envía un movej por punto al robot">Ejecutar</button>
+        <button id="b-r" disabled>Reanudar</button>
+        <button id="b-b" disabled>Borrar puntos</button>
+        <button id="b-c" class="parar ancho" title="Cancela la secuencia y envía stopj">PARAR (stopj)</button>
+      </div>
+      <div class="nota">La seta del pendant es la parada real. Este botón es software.</div>
+    </section>
+
+    <section aria-label="Velocidad">
+      <h2>Velocidad y aceleración</h2>
+      <label for="n-v">Velocidad (rad/s) <span id="r-v" class="nota"></span></label>
+      <input type="range" id="s-v" step="0.001"><input type="number" id="n-v" step="0.001">
+      <label for="n-a">Aceleración (rad/s²) <span id="r-a" class="nota"></span></label>
+      <input type="range" id="s-a" step="0.001"><input type="number" id="n-a" step="0.001">
+      <div class="fila" style="margin-top:10px"><button id="b-ajustar" disabled>Aplicar</button></div>
+      <div class="nota" id="t-actual"></div>
+    </section>
+
+    <section aria-label="Ficheros">
+      <h2>Fichero de la secuencia</h2>
+      <label for="f-nombre">Nombre (carpeta datos/secuencias)</label>
+      <input type="text" id="f-nombre" value="secuencia" maxlength="40" list="f-lista" autocomplete="off">
+      <datalist id="f-lista"></datalist>
+      <div class="botones" style="margin-top:8px">
+        <button id="b-s" disabled>Guardar</button><button id="b-l" disabled>Cargar</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section aria-label="Gráfico de las articulaciones">
+      <div class="grafico-cab">
+        <h2>Articulaciones (°) en el tiempo</h2>
+        <div class="ventanas" role="group" aria-label="Ventana de tiempo">
+          <button data-v="10" aria-pressed="false">10 s</button>
+          <button data-v="30" aria-pressed="true">30 s</button>
+          <button data-v="60" aria-pressed="false">60 s</button>
+        </div>
+      </div>
+      <div id="caja"><canvas id="grafico" role="img" aria-label="Ángulo de cada articulación en los últimos segundos"></canvas><div id="tip"></div></div>
+      <table style="margin-top:10px" aria-label="Valores actuales de las articulaciones">
+        <thead><tr><th>Articulación (clic: mostrar/ocultar)</th><th>Ahora (°)</th><th>Ahora (rad)</th><th id="th-obj">Objetivo (°)</th></tr></thead>
+        <tbody id="t-art"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <div class="col">
+    <section aria-label="Puntos">
+      <h2>Puntos guardados (°) <span id="n-puntos" class="nota"></span></h2>
+      <table><thead><tr><th>#</th><th>J1</th><th>J2</th><th>J3</th><th>J4</th><th>J5</th><th>J6</th></tr></thead>
+        <tbody id="t-puntos"></tbody></table>
+      <div class="nota" id="sin-puntos">Aún no hay puntos: lleva el robot a una posición y pulsa «Guardar punto».</div>
+    </section>
+    <section aria-label="Mensajes">
+      <h2>Mensajes y alarmas</h2>
+      <div id="mensajes" aria-live="polite"></div>
+    </section>
+  </div>
+</main>
+
+<script type="application/json" id="inicial">__INICIAL__</script>
+<script>
+"use strict";
+const TOKEN = new URLSearchParams(location.search).get("t") || "";
+const NOMBRES = ["J1 Base", "J2 Hombro", "J3 Codo", "J4 Muñeca 1", "J5 Muñeca 2", "J6 Muñeca 3"];
+const MODOS = {"-1": "NO_CONTROLLER", 0: "DISCONNECTED", 1: "CONFIRM_SAFETY", 2: "BOOTING", 3: "POWER_OFF", 4: "POWER_ON",
+               5: "IDLE", 6: "BACKDRIVE", 7: "RUNNING", 8: "UPDATING_FIRMWARE"};
+const GRAD = 180 / Math.PI;
+const $ = id => document.getElementById(id);
+let est = null;                 // último estado recibido
+let ventana = 30;               // s
+let oculta = new Set();         // articulaciones ocultas en el gráfico
+let cursor = null;              // x del puntero sobre el gráfico (px), o null
+let editando = false;           // el usuario está tocando velocidad/aceleración: no pisarlas
+
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const grados = rad => rad * GRAD;
+const f1 = x => (Math.round(x * 10) / 10).toFixed(1);
+
+function fijar(chip, texto, clase) {
+  const el = $(chip);
+  el.className = "chip " + (clase || "");
+  el.querySelector("b").textContent = texto;
+}
+
+async function pedir() {
+  try {
+    const r = await fetch("/estado?t=" + encodeURIComponent(TOKEN), {cache: "no-store"});
+    if (!r.ok) throw new Error(r.status);
+    est = await r.json();
+    document.body.classList.remove("sin-datos");
+    pintar();
+  } catch (e) {
+    document.body.classList.add("sin-datos");
+    fijar("c-conexion", "sin respuesta del programa", "critico");
+  }
+}
+
+async function orden(linea) {
+  try {
+    const r = await fetch("/orden?t=" + encodeURIComponent(TOKEN),
+      {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({linea})});
+    if (!r.ok) alert("El programa ha rechazado la orden (" + r.status + ").");
+  } catch (e) { alert("No hay conexión con el programa."); }
+  pedir();
+}
+
+/* ---------- cabecera, alarma y botones ---------- */
+function pintar() {
+  const e = est;
+  $("v-robot").textContent = e.robot || "—";
+  fijar("c-conexion", e.conectado ? "conectado" : "reconectando…", e.conectado ? "bien" : "critico");
+  const modo = e.modo === null || e.modo === undefined ? "—" : (MODOS[e.modo] || "modo " + e.modo) + " (" + e.modo + ")";
+  fijar("c-modo", modo, e.modo === 7 ? "bien" : (e.modo == null ? "" : "aviso"));
+  fijar("c-programa", e.ejecutando ? "en marcha" : "parado", e.ejecutando ? "aviso" : "");
+  fijar("c-proteccion", e.protegido ? "PARADA DE PROTECCIÓN" : "normal", e.protegido ? "critico" : "bien");
+  fijar("c-emergencia", e.emergencia ? "PARADA DE EMERGENCIA" : "normal", e.emergencia ? "critico" : "bien");
+  const fase = e.fase === "libre" ? "libre" : e.fase + (e.punto ? " · punto " + e.punto + "/" + e.puntos.length : "");
+  fijar("c-fase", fase, e.fase === "parada" ? "critico" : (e.fase === "libre" ? "" : "aviso"));
+
+  // alarma: lo más grave primero
+  let titulo = "", detalle = "";
+  const mal = [...e.mensajes].reverse().find(m => /\*\*\*|ERROR/.test(m)) || "";
+  if (e.emergencia) { titulo = "PARADA DE EMERGENCIA"; detalle = "Libérala en el pendant. No se ejecuta ni se reanuda nada."; }
+  else if (e.protegido) { titulo = "PARADA DE PROTECCIÓN"; detalle = "Espera a que el robot la libere. No se ejecuta ni se reanuda nada."; }
+  else if (!e.conectado) { titulo = "Sin conexión con el robot"; detalle = "El programa reintenta cada pocos segundos."; }
+  else if (e.fase === "parada") { titulo = "Secuencia detenida"; detalle = (mal || "Algo ha fallado") + " — «Reanudar» o «PARAR»."; }
+  $("alarma").classList.toggle("visible", titulo !== "");
+  $("alarma-titulo").textContent = titulo;
+  $("alarma-detalle").textContent = detalle;
+
+  // botones según la fase (como _comando: en marcha o parada solo valen cancelar y reanudar)
+  const libre = e.fase === "libre", hay = e.puntos.length > 0, ok = e.conectado;
+  $("b-g").disabled = !(libre && ok && e.q);
+  $("b-v").disabled = !(libre && hay && e.q);
+  $("b-e").disabled = !(libre && hay && ok && !e.emergencia && !e.protegido);
+  $("b-r").disabled = e.fase !== "parada";
+  $("b-b").disabled = !(libre && hay);
+  $("b-s").disabled = !(libre && hay);
+  $("b-l").disabled = !libre;
+  $("b-ajustar").disabled = !libre;
+  $("b-c").disabled = !ok && libre;
+
+  // velocidad y aceleración
+  const [vmin, vmax] = e.limites.velocidad, [amin, amax] = e.limites.aceleracion;
+  for (const [s, n, lo, hi, val] of [["s-v", "n-v", vmin, vmax, e.velocidad], ["s-a", "n-a", amin, amax, e.aceleracion]]) {
+    $(s).min = lo; $(s).max = hi; $(n).min = lo; $(n).max = hi;
+    if (!editando && document.activeElement !== $(n) && document.activeElement !== $(s)) { $(s).value = val; $(n).value = val; }
+  }
+  $("r-v").textContent = "(" + vmin + " – " + vmax + ")";
+  $("r-a").textContent = "(" + amin + " – " + amax + ")";
+  $("t-actual").textContent = "En uso: " + e.velocidad + " rad/s y " + e.aceleracion + " rad/s². Vale para los próximos movimientos.";
+
+  // ficheros
+  const lista = $("f-lista");
+  const nombres = e.ficheros.map(f => f.replace(/\.json$/, ""));
+  if (lista.dataset.v !== nombres.join("|")) {
+    lista.dataset.v = nombres.join("|");
+    lista.replaceChildren(...nombres.map(n => { const o = document.createElement("option"); o.value = n; return o; }));
+  }
+
+  pintarTablas();
+  pintarMensajes();
+  dibujar();
+}
+
+function celdas(tr, valores) { for (const v of valores) { const td = document.createElement("td"); td.textContent = v; tr.appendChild(td); } }
+
+function initTabla() {          // las 6 filas de articulaciones se crean una vez; luego solo cambian los textos
+  NOMBRES.forEach((nombre, i) => {
+    const tr = document.createElement("tr");
+    tr.className = "leyenda-fila"; tr.tabIndex = 0; tr.setAttribute("role", "button");
+    const td = document.createElement("td");
+    const clave = document.createElement("span"); clave.className = "clave"; clave.style.borderColor = css("--s" + (i + 1));
+    td.append(clave, " " + nombre); tr.appendChild(td);
+    celdas(tr, ["—", "—", "—"]);
+    const alternar = () => { oculta.has(i) ? oculta.delete(i) : oculta.add(i); if (est) pintar(); };
+    tr.onclick = alternar; tr.onkeydown = ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); alternar(); } };
+    $("t-art").appendChild(tr);
+  });
+}
+
+function pintarTablas() {
+  const e = est;
+  const objetivo = (e.punto && e.puntos[e.punto - 1]) || null;
+  $("th-obj").textContent = objetivo ? "Objetivo p." + e.punto + " (°)" : "Objetivo (°)";
+  NOMBRES.forEach((nombre, i) => {
+    const tr = $("t-art").children[i], c = tr.children;
+    tr.classList.toggle("apagada", oculta.has(i)); tr.setAttribute("aria-pressed", String(!oculta.has(i)));
+    c[1].textContent = e.q ? f1(grados(e.q[i])) : "—";
+    c[2].textContent = e.q ? e.q[i].toFixed(3) : "—";
+    c[3].textContent = objetivo ? f1(grados(objetivo[i])) : "—";
+  });
+  const pts = $("t-puntos"); pts.replaceChildren();
+  e.puntos.forEach((p, k) => {
+    const tr = document.createElement("tr");
+    if (e.punto === k + 1) tr.className = "activa";
+    celdas(tr, [k + 1, ...p.map(a => f1(grados(a)))]);
+    pts.appendChild(tr);
+  });
+  $("sin-puntos").style.display = e.puntos.length ? "none" : "block";
+  $("n-puntos").textContent = e.puntos.length ? "(" + e.puntos.length + ")" : "";
+}
+
+function pintarMensajes() {
+  const caja = $("mensajes");
+  const abajo = caja.scrollTop + caja.clientHeight >= caja.scrollHeight - 8;
+  caja.replaceChildren(...est.mensajes.map(m => {
+    const d = document.createElement("div"); d.textContent = m;           // textContent: el texto viene de fuera
+    if (/\*\*\*|ERROR|FALLO/.test(m)) d.className = "mal";
+    return d;
+  }));
+  if (abajo) caja.scrollTop = caja.scrollHeight;
+}
+
+/* ---------- gráfico ---------- */
+function paso(rango, divisiones) {
+  const bruto = rango / divisiones, mag = Math.pow(10, Math.floor(Math.log10(bruto))), r = bruto / mag;
+  return (r < 1.5 ? 1 : r < 3 ? 2 : r < 7 ? 5 : 10) * mag;
+}
+
+function dibujar() {
+  const cv = $("grafico"), ctx = cv.getContext("2d"), dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const M = {l: 46, r: 14, t: 10, b: 24}, W = w - M.l - M.r, H = h - M.t - M.b;
+  const tmax = est.t, tmin = tmax - ventana;
+  const datos = est.historial.filter(m => m[0] >= tmin - 1);
+  const vis = [0, 1, 2, 3, 4, 5].filter(i => !oculta.has(i));
+  let lo = Infinity, hi = -Infinity;
+  for (const m of datos) for (const i of vis) { const v = grados(m[i + 1]); if (v < lo) lo = v; if (v > hi) hi = v; }
+  if (!isFinite(lo)) { lo = -10; hi = 10; }
+  if (hi - lo < 20) { const c = (hi + lo) / 2; lo = c - 10; hi = c + 10; }
+  const margen = (hi - lo) * 0.08; lo -= margen; hi += margen;
+  const dy = paso(hi - lo, 6);
+  const X = t => M.l + (t - tmin) / ventana * W, Y = v => M.t + (hi - v) / (hi - lo) * H;
+
+  ctx.font = "11px system-ui, sans-serif"; ctx.lineWidth = 1;
+  ctx.textBaseline = "middle"; ctx.textAlign = "right";
+  for (let v = Math.ceil(lo / dy) * dy; v <= hi; v += dy) {          // rejilla horizontal: hairline, recesiva
+    const y = Math.round(Y(v)) + 0.5;
+    ctx.strokeStyle = v === 0 ? css("--eje") : css("--rejilla");
+    ctx.beginPath(); ctx.moveTo(M.l, y); ctx.lineTo(M.l + W, y); ctx.stroke();
+    ctx.fillStyle = css("--tinta-3"); ctx.fillText(String(Math.round(v * 100) / 100), M.l - 6, y);
+  }
+  ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillStyle = css("--tinta-3");
+  const dx = ventana / 6;
+  for (let k = 0; k <= 6; k++) {
+    const t = tmin + k * dx, x = Math.round(X(t)) + 0.5;
+    ctx.strokeStyle = css("--rejilla"); ctx.beginPath(); ctx.moveTo(x, M.t); ctx.lineTo(x, M.t + H); ctx.stroke();
+    ctx.fillText(k === 6 ? "ahora" : "−" + Math.round(ventana - k * dx) + " s", x, M.t + H + 6);
+  }
+  ctx.save(); ctx.beginPath(); ctx.rect(M.l, M.t, W, H); ctx.clip();
+  ctx.lineWidth = 2; ctx.lineJoin = "round"; ctx.lineCap = "round";
+  for (const i of vis) {
+    ctx.strokeStyle = css("--s" + (i + 1)); ctx.beginPath();
+    datos.forEach((m, k) => { const x = X(m[0]), y = Y(grados(m[i + 1])); k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.stroke();
+  }
+  ctx.restore();
+  if (datos.length) {                                                  // punto final con anillo de superficie
+    const u = datos[datos.length - 1];
+    for (const i of vis) {
+      const x = X(u[0]), y = Y(grados(u[i + 1]));
+      ctx.fillStyle = css("--superficie"); ctx.beginPath(); ctx.arc(x, y, 6, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = css("--s" + (i + 1)); ctx.beginPath(); ctx.arc(x, y, 4, 0, 6.2832); ctx.fill();
+    }
+  }
+  if (!datos.length) { ctx.fillStyle = css("--tinta-3"); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+                       ctx.fillText("Esperando datos del robot…", M.l + W / 2, M.t + H / 2); }
+  // cruz y tooltip: una lista con todas las series en ese instante
+  const tip = $("tip");
+  if (cursor !== null && datos.length && cursor >= M.l && cursor <= M.l + W) {
+    const t = tmin + (cursor - M.l) / W * ventana;
+    let m = datos[0]; for (const d of datos) if (Math.abs(d[0] - t) < Math.abs(m[0] - t)) m = d;
+    const x = Math.round(X(m[0])) + 0.5;
+    ctx.strokeStyle = css("--tinta-3"); ctx.beginPath(); ctx.moveTo(x, M.t); ctx.lineTo(x, M.t + H); ctx.stroke();
+    tip.replaceChildren();
+    const cab = document.createElement("div"); cab.className = "t"; cab.textContent = "hace " + f1(tmax - m[0]) + " s"; tip.appendChild(cab);
+    for (const i of vis) {
+      const fila = document.createElement("div"); fila.className = "f";
+      const a = document.createElement("span"), clave = document.createElement("span");
+      clave.className = "clave"; clave.style.borderColor = css("--s" + (i + 1));
+      a.append(clave, NOMBRES[i]);
+      const b = document.createElement("b"); b.textContent = f1(grados(m[i + 1])) + " °";
+      fila.append(a, b); tip.appendChild(fila);
+    }
+    tip.style.display = "block";
+    const izq = x > M.l + W / 2;
+    tip.style.left = (izq ? x - tip.offsetWidth - 12 : x + 12) + "px"; tip.style.top = (M.t + 8) + "px";
+  } else tip.style.display = "none";
+}
+
+/* ---------- eventos ---------- */
+$("grafico").addEventListener("pointermove", ev => { cursor = ev.clientX - $("grafico").getBoundingClientRect().left; if (est) dibujar(); });
+$("grafico").addEventListener("pointerleave", () => { cursor = null; if (est) dibujar(); });
+window.addEventListener("resize", () => { if (est) dibujar(); });
+document.querySelectorAll(".ventanas button").forEach(b => b.onclick = () => {
+  ventana = Number(b.dataset.v);
+  document.querySelectorAll(".ventanas button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  if (est) dibujar();
+});
+$("b-g").onclick = () => orden("g");
+$("b-v").onclick = () => orden("v");
+$("b-e").onclick = () => {
+  const n = est.puntos.length;
+  if (confirm("Se va a MOVER el robot por " + n + " punto(s) a " + est.velocidad + " rad/s y " + est.aceleracion +
+              " rad/s².\n\n¿Zona despejada, frenos liberados y profesor delante (si es el robot real)?")) orden("e");
+};
+$("b-r").onclick = () => orden("r");
+$("b-b").onclick = () => { if (confirm("¿Borrar los " + est.puntos.length + " puntos?")) orden("b"); };
+$("b-c").onclick = () => orden("c");
+$("b-s").onclick = () => orden("s " + $("f-nombre").value);
+$("b-l").onclick = () => orden("l " + $("f-nombre").value);
+$("b-ajustar").onclick = () => { editando = false; orden("ajustar " + $("n-v").value + " " + $("n-a").value); };
+for (const [s, n] of [["s-v", "n-v"], ["s-a", "n-a"]]) {
+  $(s).oninput = () => { editando = true; $(n).value = $(s).value; };
+  $(n).oninput = () => { editando = true; $(s).value = $(n).value; };
+}
+initTabla();
+try { est = JSON.parse($("inicial").textContent); pintar(); } catch (e) { /* abierto sin servidor: espera a /estado */ }
+pedir();
+setInterval(pedir, 200);
+</script>
+</body>
+</html>

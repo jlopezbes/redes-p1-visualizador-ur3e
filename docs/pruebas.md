@@ -22,7 +22,7 @@ Todos los comandos, desde la raíz del repo, en PowerShell 5.1 con Python 3.7.5.
 | T8 | Revisión de robustez, capa 4 (`main.py`, `tareas.py`): `main()` con argumentos y `robots.json` malos (código 2, sin crear el simulador), errores de capa (1) y Ctrl+C (0); `ensenar_reproducir` contra el robot falso con la ventana (falsa) cerrada en pleno movimiento (llega `stopj`), EOF, `q` con el robot caído; `b/l/g` con la secuencia parada. `test_tareas`: 13 → 22 | `python -B -m unittest discover -s 2_practicas\Practica1_visualizador_UR3e\pruebas` | 149 pruebas OK en ≈ 19 s (tres ejecuciones seguidas; robot falso en `127.0.0.1`, simulador falso: sin ventana, sin robots reales ni URSim; `robots.json` real solo se parsea en `test_el_robots_json_de_src_es_valido`) | ⚠️ | 2026-10-14 |
 | T9 | Tras C1–C4, `main.py` entero con la ventana REAL de PyBullet y robots falsos propios (primaria, tiempo real, varios, `ensenar` con g, l, v, e, q, y `--v 0.5` rechazado). Aquí apareció F21: `ensenar` se quedaba mudo. Además, con la ventana real, `q` cierra la ventana (`btShutDownExampleBrowser ... Thread TERMINATED`: `Simulador.cerrar()` verificado) | `python -u 2_practicas\Practica1_visualizador_UR3e\pruebas\humo_extremo_a_extremo.py` y `python -B -m unittest discover -s 2_practicas\Practica1_visualizador_UR3e\pruebas` | Antes del arreglo: 6 FALLOS en `ensenar`. Después: `TODO OK` y 149 pruebas OK en ≈ 19 s. Sin robots reales ni URSim | ✅ | 2026-10-14 |
 
-**Las filas T1–T9 son del código anterior a la limpieza** (D17–D21): los nombres (`UrPrimaria`, `LectorUR`, `ErrorUR`, `estado_fresco`…) y los números de pruebas ya no valen; los resultados vigentes son los de T10–T12. T3 también usaba la opción `desplazado`, que ya no existe.
+**Las filas T1–T9 son del código anterior a la limpieza** (D17–D21): los nombres (`UrPrimaria`, `LectorUR`, `ErrorUR`, `estado_fresco`…) y los números de pruebas ya no valen; los resultados vigentes son los de T10–T12 y, desde la reorganización del 2026-10-17, los de **T14–T16** (T10 a T13 hablan de `main.py` y `tareas.py`, que ya no existen). T3 también usaba la opción `desplazado`, que ya no existe.
 
 | Id | Qué se prueba | Comando | Resultado | Estado | Fecha |
 |---|---|---|---|---|---|
@@ -32,19 +32,24 @@ Todos los comandos, desde la raíz del repo, en PowerShell 5.1 con Python 3.7.5.
 
 | T13 | D22: robot sacado de `robots.json` (primero por defecto, `--robot`, nombre inexistente, `--robot` con `--ip`) y regresión de T10 y T12 | `python -B -m unittest discover -s 2_practicas\Practica1_visualizador_UR3e\pruebas` y `python -u 2_practicas\Practica1_visualizador_UR3e\pruebas\humo_extremo_a_extremo.py` | 125 pruebas OK en ≈ 32 s (3 nuevas + `ip_robot`); humo `TODO OK` (15 comprobaciones; ahora con `--ip 127.0.0.1` explícito). Robots falsos: no es URSim ni un UR3e | ⚠️ | 2026-10-16 |
 
+| T14 | **Reorganización por niveles y web (D23–D25), 2026-10-17.** Suite completa: `red` (12), `ur` (47), `simulador` (18), `secuencia` (40), `integracion` (10), `ensenar` (56), `scripts` (15) y `hmi` (25). Sustituye a `tareas` y `main` de T10. Cubre: rutas relativas (los tres scripts desde otra carpeta, sin rutas absolutas en el código), `leer_robots` y `elegir_robots`, `visualizar` con 1 y 2 robots (uno caído), comandos de `ensenar` (incluido `ajustar` y los ficheros solo por nombre dentro de `datos/secuencias/`), `_estado`, `main()` de `ensenar` contra el robot falso (guardar, ejecutar, caída del robot, Ctrl+C, ventana cerrada, EOF), el bloque `__main__` de cada script (códigos 0 y 1) y el servidor web (token, `Host`, 403/415/400/404, escape de `<`, concurrencia) | `python -B -m unittest discover -s 2_practicas\Practica1_visualizador_UR3e\pruebas` | **223 pruebas, 221 OK y 2 fallos conocidos de Linux** (`test_desconectar_desde_otro_hilo_despierta_a_recibir_con_errorred` y `test_detener_cierra_el_socket_y_el_hilo_termina_enseguida`: en Linux `close()` desde otro hilo no despierta a `recv()`, tarda el timeout; con `shutdown()` antes despierta en 0,30 s frente a 5,02 s). Ejecutado en la Pi con Python 3.11 y robots falsos en `127.0.0.1`, **no con 3.7.5 en Windows**: ahí hay que repetirlo | ⚠️ | 2026-10-17 |
+| T15 | Humo de extremo a extremo con los 3 scripts: `primaria` y `tiempo_real` con 1 robot y con 2 (responde «2»), `ensenar` por consola (`ajustar 0.5 0.5` rechazado, `ajustar 0.3 0.5`, `g`, `l`, `v`, `e`, `q`) y por la web (GET `/estado`, 403 sin token y con otro `Host`, POST `g`), y los tres con `robots.json` vacío → código 1 | `python -u 2_practicas\Practica1_visualizador_UR3e\pruebas\humo_extremo_a_extremo.py` | `TODO OK` (29 comprobaciones; 3 ejecuciones seguidas con la Pi tranquila y, con la Pi muy cargada, 2 de 3 OK: en la otra se agotó el tiempo al arrancar Python). Las esperas son «hasta que aparezca la línea esperada», no fijas. Ejecutado en la Pi con un **sustituto sin ventana** de `UR3e_rg2` y `pybullet`, contra robots falsos: la ventana real de PyBullet no se ha visto. En el PC de Josu usa la real. Al salir con `q` con la entrada por tubería, Python 3.11 imprime un `Fatal Python error` del hilo de la consola (F26): ya no se exige código 0 | ⚠️ | 2026-10-17 |
+| T16 | La web en un navegador: Firefox sin cabeza contra `ensenar.py` con un robot falso que recorre 4 puntos (`g`×4, `ajustar 0.25 0.4`, `s`, `e`) y con una parada de protección a mitad de secuencia; capturas de pantalla | Guion y lanzador fuera del repo (no se entregan) | Se ven las 6 articulaciones (gráfico, tabla y tooltip no probado), el punto activo resaltado, los avisos y, con la parada, el banner «PARADA DE PROTECCIÓN», `Secuencia: parada · punto 3/4` y el botón `Reanudar` activo. **No** probado: el tooltip con el puntero, el tema oscuro, `confirm()` de «Ejecutar», Chrome/Edge del PC de la universidad | ⚠️ | 2026-10-17 |
+
 Qué cubre T10 en lo que más importa (cada punto con su prueba en `pruebas/`):
 
 - Corte de paquetes con mensajes troceados (byte a byte), longitudes imposibles y desalineación; decodificación de estado y errores → `test_ur.py`.
 - `movej` se niega a enviar ángulos en grados, 5 ángulos, velocidades > 0,3 rad/s o aceleraciones > 0,5 rad/s², y no envía nada → `test_ur.py`.
 - Máquina de estados: camino feliz, parada de protección y reanudar, error del robot, orden no aceptada, cancelar, conexión perdida → `test_secuencia.py` (reloj controlado) y `test_integracion.py` (contra el robot falso, con movimiento real).
 - Reconexión de `HiloLectorUR` cuando el robot corta → `test_ur.py` y `test_integracion.py`.
-- Las tareas de la práctica de principio a fin (con simulador falso) → `test_tareas.py`.
+- Las tareas de la práctica de principio a fin (con simulador falso) → `test_ensenar.py` (`ensenar`), `test_simulador.py` (`visualizar`) y `test_scripts.py` (los scripts). El servidor web → `test_hmi.py`.
 
-Para lanzar el robot falso a mano y probar `main.py` sin URSim (**no usar los puertos 30001–30013 con URSim abierto**):
+Para lanzar el robot falso a mano y probar los scripts sin URSim (**no usar los puertos 30001–30013 con URSim abierto**):
 
 ```powershell
 python -u 2_practicas\Practica1_visualizador_UR3e\pruebas\robot_falso.py 31001
-python -u 2_practicas\Practica1_visualizador_UR3e\src\main.py primaria --puerto 31001
+# los scripts usan siempre 30001 / 30003: para probar con el robot falso, o un lanzador como el de humo_extremo_a_extremo.py,
+# o el robot falso en el puerto 30001 (solo con URSim CERRADO y sin otro robot en ese puerto)
 ```
 
 ## Versiones de partida desde su nueva carpeta (2026-10-14)
@@ -67,7 +72,9 @@ Lo que **no** demuestran V1 y V2: el robot falso no es URSim ni un robot real, a
 
 ## Lo que no se ha probado
 
-- **`src/` contra URSim o un UR3e real.** Es lo siguiente. Antes de enviar `movej` a URSim hay que avisar a Josu; en un robot real, `--v 0.1 --a 0.2`, zona despejada y primero solo lectura (`primaria`).
+- **`src/` contra URSim o un UR3e real, tras la reorganización del 2026-10-17.** Josu cuenta (2026-10-17) que la versión de `src/` anterior (la del commit `6a62805`, con `main.py`) se enseñó al profesor con URSim y la dio por buena; es un dato suyo, no una ejecución de la Pi ni consta en el repo. Los scripts nuevos cambian solo la forma de arrancar, pero hay que repetir la prueba con URSim. Antes de enviar `movej` a URSim hay que avisar a Josu; en un robot real, velocidad 0,1 rad/s y aceleración 0,2 rad/s², zona despejada y primero solo lectura (`primaria.py`).
+- **La web con un robot de verdad** (URSim o UR3e) y en el navegador del PC de la universidad; y los tiempos con el robot real (la página pide el estado 5 veces por segundo).
+- **Python 3.7.5 en Windows con los scripts nuevos y el servidor web** (`http.server.ThreadingHTTPServer` existe desde 3.7; no se ha ejecutado con esa versión).
 - **Lo que se ve en la ventana.** T3 y T4 comprueban los ángulos por la API de PyBullet, no a ojo: la postura reconocible y el convenio de ángulos del enunciado (apartado 9) los tiene que mirar Josu.
 - **Formatos del protocolo con un robot:** los 251 B del subpaquete 1, los offsets de los mensajes tipo 20 (subtipos 6 y 10) y el offset 252 del tiempo real salen del PDF a través de `claude_2` y no están verificados.
 - **Carga del tiempo real:** el robot falso emite a 10 Hz; un robot real manda ≈ 500 paquetes/s al `HiloLectorUR`.

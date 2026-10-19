@@ -11,8 +11,14 @@ Lo que hace esta clase por nosotros:
     es el unico sitio donde se captura Exception a secas, porque PyBullet no tiene una jerarquia de errores util.
 
 PyBullet no es seguro entre hilos: Simulador se usa siempre desde el hilo principal.
+
+visualizar(clientes) es el bucle de primaria.py y tiempo_real.py: un hilo lector por robot (ur.HiloLectorUR) y este
+hilo, el principal, dibujando el ultimo q de cada uno.
 """
+import math
 import time
+
+import ur
 
 PASOS_TRAMO = 20            # pasos de interpolacion entre dos puntos de la vista previa
 DURACION_TRAMO = 1.0        # s por tramo de la vista previa
@@ -75,3 +81,36 @@ class Simulador:
                 pybullet.disconnect()
             except Exception:                   # ya estaba cerrada: da igual
                 pass
+
+
+def visualizar(clientes):
+    """clientes: {nombre: ClienteUR sin conectar}. Mueve cada robot simulado a su ultimo q y escribe una linea por
+    robot cada segundo. Termina con Ctrl+C. Al salir, por lo que sea, detiene los hilos lectores. Un robot desconectado no se mueve."""
+    lectores = [ur.HiloLectorUR(nombre, cliente) for nombre, cliente in clientes.items()]
+    contados = {l.nombre: 0 for l in lectores}
+    simulador = Simulador()
+    try:
+        for lector in lectores:
+            simulador.agregar_robot(lector.nombre)
+            lector.start()
+        t_info = time.time()
+        while True:
+            for lector in lectores:
+                q = lector.q
+                if q:
+                    simulador.mover(lector.nombre, q)
+            ahora = time.time()
+            if ahora - t_info >= 1.0:
+                for lector in lectores:
+                    q = lector.q
+                    por_segundo = (lector.recibidos - contados[lector.nombre]) / (ahora - t_info)
+                    contados[lector.nombre] = lector.recibidos
+                    print("[{}] {:.0f} estados/s | q (grados): {}".format(
+                        lector.nombre, por_segundo,
+                        [round(math.degrees(a), 1) for a in q] if q else (lector.ultimo_error or "sin datos")))
+                t_info = ahora
+            time.sleep(1 / 30)              # 30 redibujados por segundo
+    finally:
+        for lector in lectores:
+            lector.detener()
+        simulador.cerrar()

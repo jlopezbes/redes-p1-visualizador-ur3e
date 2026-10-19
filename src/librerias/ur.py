@@ -3,6 +3,7 @@ Comunicacion con un robot UR por sockets TCP, encima de red.ConexionTCP.
 
     ClienteUR      portal entre la red y el robot: conecta, entrega lo que dice el robot ya decodificado y envia ordenes
     HiloLectorUR   hilo aparte que lee un robot sin parar y guarda solo el ultimo q
+    leer_robots    robots.json -> {nombre: ip};  elegir_robots  pregunta cuantos se visualizan
 
 Los fallos (red caida, mensajes que no se entienden, robot que calla...) salen como red.ErrorRed.
 ValueError solo significa "argumento mal puesto" (p. ej. un movej fuera de limites).
@@ -16,6 +17,7 @@ Formatos (todo big-endian). Los dos empiezan por la longitud del paquete (int32,
   Tiempo real (30003, unos 500 Hz):
     paquete      = [longitud int32][time double][...], q_actual empieza siempre en el byte 252
 """
+import json
 import math
 import struct
 import threading
@@ -55,6 +57,34 @@ def es_punto_valido(q):
         return len(q) == 6 and all(abs(a) <= 2 * math.pi for a in q)
     except TypeError:
         return False
+
+
+def leer_robots(ruta):
+    """JSON [{"nombre": "robot1", "ip": "10.172.18.74"}, ...] -> {nombre: ip}, en el orden del fichero.
+    Lanza ValueError si no se puede leer o le falta algo."""
+    try:
+        with open(ruta, encoding="utf-8-sig") as f:        # utf-8-sig: tolera el BOM que anade el Bloc de notas
+            robots = {r["nombre"]: r["ip"] for r in json.load(f)}
+    except (OSError, ValueError, KeyError, TypeError) as e:     # fichero, JSON, campo que falta
+        raise ValueError("{}: {}: {}".format(ruta, type(e).__name__, e)) from e
+    if not robots:
+        raise ValueError("{}: no hay ningun robot".format(ruta))
+    return robots
+
+
+def elegir_robots(robots):
+    """Pregunta cuantos robots visualizar (de 1 al total, Intro = 1) y devuelve {nombre: ip} de los primeros.
+    Con un solo robot en el JSON no pregunta."""
+    if len(robots) == 1:
+        return dict(robots)
+    while True:
+        try:
+            texto = input("Robots a visualizar (1-{}, Intro = 1): ".format(len(robots))).strip() or "1"
+        except EOFError:                # entrada cerrada: el valor por defecto
+            texto = "1"
+        if texto.isdigit() and 1 <= int(texto) <= len(robots):
+            return dict(list(robots.items())[:int(texto)])
+        print("Escribe un numero entre 1 y {}".format(len(robots)))
 
 
 class ClienteUR:

@@ -1,6 +1,6 @@
 """
-Ayudas comunes de las pruebas: ruta a src/, constructores de tramas del UR y un servidor local.
-Las tramas se construyen aqui con struct a partir del formato descrito en src/ur.py y docs/ur-referencia.md:
+Ayudas comunes de las pruebas: rutas a src/ y src/librerias/, constructores de tramas del UR y un servidor local.
+Las tramas se construyen aqui con struct a partir del formato descrito en src/librerias/ur.py y docs/ur-referencia.md:
 si el formato fuera otro en un robot real, estas pruebas no lo detectarian (ver docs/pruebas.md).
 """
 import os
@@ -9,7 +9,12 @@ import struct
 import sys
 import threading
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
+AQUI = os.path.dirname(os.path.abspath(__file__))
+SRC = os.path.normpath(os.path.join(AQUI, "..", "src"))                 # los scripts: import ensenar, import primaria...
+LIBRERIAS = os.path.join(SRC, "librerias")                              # los modulos planos: import ur, import red...
+for carpeta in (SRC, LIBRERIAS):
+    if carpeta not in sys.path:
+        sys.path.insert(0, carpeta)
 
 
 def subpaquete(tipo, datos):
