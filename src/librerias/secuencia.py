@@ -13,8 +13,6 @@ Fases del Reproductor (self.fase):
 El Reproductor no abre sockets ni ventanas: recibe un robot (ClienteUR) y los mensajes que llegan de el.
 Hacia fuera no deja salir ErrorRed: lo trata dentro (parada, aviso y fase). De los ficheros solo sale ErrorSecuencia.
 """
-import collections
-import datetime
 import json
 import time
 
@@ -25,15 +23,6 @@ LIBRE, ENVIADO, MOVIENDO, PARADA = None, "enviado", "moviendo", "parada"
 
 TOLERANCIA = 0.01         # rad: distancia maxima al objetivo para dar el punto por alcanzado
 ESPERA_ARRANQUE = 2.0     # s: si el programa no arranca en este tiempo, la orden se da por rechazada
-
-
-mensajes = collections.deque(maxlen=50)      # los ultimos avisos, con hora: la web (hmi.py) los muestra
-
-
-def avisar(texto):
-    """Escribe un aviso por consola y lo guarda en `mensajes` para la web."""
-    print(texto)
-    mensajes.append("{} {}".format(datetime.datetime.now().strftime("%H:%M:%S"), texto))
 
 
 class ErrorSecuencia(Exception):
@@ -95,29 +84,29 @@ class Reproductor:
     # ---------- ordenes del usuario ----------
     def guardar_punto(self):
         if self.q is None:
-            avisar("Todavia no se ha recibido la posicion del robot")
+            print("Todavia no se ha recibido la posicion del robot")
         else:
             self.secuencia.append(list(self.q))
-            avisar("Punto {} guardado".format(len(self.secuencia)))
+            print("Punto {} guardado".format(len(self.secuencia)))
 
     def ejecutar(self):
         if not self.secuencia or self.q is None:
-            avisar("Nada que ejecutar")
+            print("Nada que ejecutar")
         elif self.fase == PARADA:
-            avisar("Hay una parada pendiente: 'r' para reanudar o 'c' para cancelar")
+            print("Hay una parada pendiente: 'r' para reanudar o 'c' para cancelar")
         elif self.fase != LIBRE:
-            avisar("Ya hay una secuencia en marcha")
+            print("Ya hay una secuencia en marcha")
         elif self._motivo_bloqueo():
-            avisar("No se ejecuta: " + self._motivo_bloqueo())
+            print("No se ejecuta: " + self._motivo_bloqueo())
         else:
             self.i = 0
             self._enviar_punto()
 
     def reanudar(self):
         if self.fase != PARADA:
-            avisar("No hay ninguna parada que reanudar")
+            print("No hay ninguna parada que reanudar")
         elif self._motivo_bloqueo():
-            avisar("No se reanuda: {}. El robot sigue en parada de proteccion o de emergencia".format(self._motivo_bloqueo()))
+            print("No se reanuda: {}. El robot sigue en parada de proteccion o de emergencia".format(self._motivo_bloqueo()))
         else:
             self._enviar_punto()
 
@@ -126,30 +115,30 @@ class Reproductor:
             self._parar_robot()             # aunque falle, el Reproductor queda libre: no depende de la red
         self.i = None
         self.fase = LIBRE
-        avisar("Cancelado")
+        print("Cancelado")
 
     def ajustar(self, velocidad, aceleracion):
         """Cambia la velocidad (rad/s) y la aceleracion (rad/s2) de los movej que se envien a partir de ahora."""
         if not (ur.MINIMO <= velocidad <= ur.VELOCIDAD_MAX and ur.MINIMO <= aceleracion <= ur.ACELERACION_MAX):
-            avisar("No se cambia: la velocidad debe estar en [{}, {}] rad/s y la aceleracion en [{}, {}] rad/s2".format(
+            print("No se cambia: la velocidad debe estar en [{}, {}] rad/s y la aceleracion en [{}, {}] rad/s2".format(
                 ur.MINIMO, ur.VELOCIDAD_MAX, ur.MINIMO, ur.ACELERACION_MAX))
             return
         self.velocidad = velocidad
         self.aceleracion = aceleracion
-        avisar("Velocidad {} rad/s y aceleracion {} rad/s2 para los proximos movimientos".format(velocidad, aceleracion))
+        print("Velocidad {} rad/s y aceleracion {} rad/s2 para los proximos movimientos".format(velocidad, aceleracion))
 
     def conexion_perdida(self):
         """Se llama cuando se cae la conexion: si habia un movimiento en curso, queda en parada."""
         if self.ocupado:
             self._parar_robot()             # sin conexion fallara, y avisara de que el robot puede seguir moviendose
             self.fase = PARADA
-            avisar("Secuencia interrumpida en el punto {}: 'r' para reanudar o 'c' para cancelar".format(self.i + 1))
+            print("Secuencia interrumpida en el punto {}: 'r' para reanudar o 'c' para cancelar".format(self.i + 1))
 
     # ---------- supervision: se llama con cada mensaje del robot ----------
     def procesar(self, datos):
         """datos: un mensaje del robot ya decodificado (ver ClienteUR.mensajes)."""
         if "error" in datos:
-            avisar("ERROR del robot: " + datos["error"])
+            print("ERROR del robot: " + datos["error"])
             if self.ocupado:
                 self._fallar(datos["error"])
             return
@@ -171,7 +160,7 @@ class Reproductor:
                 if self.i < len(self.secuencia):
                     self._enviar_punto()
                 else:
-                    avisar("Secuencia terminada")
+                    print("Secuencia terminada")
                     self.i = None
                     self.fase = LIBRE
             else:
@@ -187,20 +176,20 @@ class Reproductor:
             return
         self.fase = ENVIADO
         self.t_envio = time.monotonic()
-        avisar("Punto {}/{} enviado".format(self.i + 1, len(self.secuencia)))
+        print("Punto {}/{} enviado".format(self.i + 1, len(self.secuencia)))
 
     def _parar_robot(self):
         """Intenta frenar el robot (stopj). Si no puede, lo dice muy claro."""
         try:
             self.robot.stopj(self.aceleracion)
         except ErrorRed as e:
-            avisar("*** NO SE HA PODIDO ENVIAR LA PARADA ({}): el robot puede seguir moviendose hasta el punto {}. "
-                  "PARALO CON EL BOTON DEL PENDANT ***".format(e, (self.i or 0) + 1))
+            print("*** NO SE HA PODIDO ENVIAR LA PARADA ({}): el robot puede seguir moviendose hasta el punto {}. "
+                 "PARALO CON EL BOTON DEL PENDANT ***".format(e, (self.i or 0) + 1))
         else:
-            avisar("Robot detenido.")
+            print("Robot detenido.")
 
     def _fallar(self, motivo):
-        avisar("*** FALLO DE LA SECUENCIA: {}".format(motivo))
+        print("*** FALLO DE LA SECUENCIA: {}".format(motivo))
         self._parar_robot()
         self.fase = PARADA
-        avisar("Escribe 'r' para reanudar desde el punto {} o 'c' para cancelar".format((self.i or 0) + 1))
+        print("Escribe 'r' para reanudar desde el punto {} o 'c' para cancelar".format((self.i or 0) + 1))

@@ -363,70 +363,13 @@ class PruebasFicherosSecuencia(unittest.TestCase):
             self.s.guardar(self.dir)                                # un directorio, no un fichero
 
 
-class PruebasAvisos(unittest.TestCase):
-    """secuencia.avisar: consola + lista de los ultimos avisos con hora para la web."""
-
-    def setUp(self):
-        secuencia.mensajes.clear()
-        self.addCleanup(secuencia.mensajes.clear)
-
-    def avisar(self, texto):
-        salida = io.StringIO()
-        with contextlib.redirect_stdout(salida):
-            secuencia.avisar(texto)
-        return salida.getvalue()
-
-    def test_imprime_el_texto(self):
-        self.assertEqual(self.avisar("hola robot"), "hola robot\n")
-
-    def test_lo_guarda_con_la_hora(self):
-        self.avisar("hola robot")
-        self.assertEqual(len(secuencia.mensajes), 1)
-        self.assertRegex(secuencia.mensajes[0], r"^\d\d:\d\d:\d\d hola robot$")
-
-    def test_la_hora_es_la_actual(self):
-        class FechaFija(secuencia.datetime.datetime):
-            @classmethod
-            def now(cls, tz=None):
-                return cls(2026, 10, 17, 9, 5, 7)
-
-        with mock.patch.object(secuencia.datetime, "datetime", FechaFija):
-            self.avisar("a las nueve")
-        self.assertEqual(list(secuencia.mensajes), ["09:05:07 a las nueve"])
-
-    def test_funciona_con_el_reloj_de_time_parcheado(self):
-        # otras pruebas cambian secuencia.time por un Reloj sin strftime: avisar usa datetime, no time
-        with mock.patch.object(secuencia, "time", Reloj()):
-            self.avisar("con reloj falso")
-        self.assertRegex(secuencia.mensajes[0], r"^\d\d:\d\d:\d\d con reloj falso$")
-
-    def test_conserva_el_orden(self):
-        for i in range(3):
-            self.avisar("aviso {}".format(i))
-        self.assertEqual([m[9:] for m in secuencia.mensajes], ["aviso 0", "aviso 1", "aviso 2"])
-
-    def test_guarda_como_mucho_50_y_quedan_los_ultimos(self):
-        self.assertEqual(secuencia.mensajes.maxlen, 50)
-        for i in range(60):
-            self.avisar("aviso {}".format(i))
-        self.assertEqual(len(secuencia.mensajes), 50)
-        self.assertEqual([m[9:] for m in secuencia.mensajes], ["aviso {}".format(i) for i in range(10, 60)])
-
-
 class PruebasAjustar(Base):
     """Reproductor.ajustar: cambia la velocidad (rad/s) y la aceleracion (rad/s2) de los proximos movej."""
-
-    def setUp(self):
-        super().setUp()
-        secuencia.mensajes.clear()
-        self.addCleanup(secuencia.mensajes.clear)
 
     def test_cambia_velocidad_y_aceleracion_y_avisa(self):
         self.rep.ajustar(0.2, 0.3)
         self.assertEqual((self.rep.velocidad, self.rep.aceleracion), (0.2, 0.3))
         self.assertIn("Velocidad 0.2 rad/s y aceleracion 0.3 rad/s2", self.salida.getvalue())
-        self.assertEqual(len(secuencia.mensajes), 1)
-        self.assertIn("Velocidad 0.2 rad/s", secuencia.mensajes[0])
 
     def test_fuera_de_rango_no_cambia_nada_y_avisa(self):
         casos = {"velocidad bajo el minimo": (0.0005, 0.3), "velocidad sobre el maximo": (0.31, 0.3),

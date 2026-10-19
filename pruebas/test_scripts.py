@@ -98,7 +98,7 @@ class PruebasRutas(unittest.TestCase):
         patrones = [re.compile(r"\b[A-Za-z]:\\"), re.compile(r"\b[A-Za-z]:/(?!/)"),
                     re.compile(r"/home/"), re.compile(r"/Users/")]
         fuentes = [os.path.join(c, f) for c in (SRC, LIBRERIAS) for f in sorted(os.listdir(c)) if f.endswith(".py")]
-        self.assertGreaterEqual(len(fuentes), 8)                 # 3 scripts (+ main/tareas si siguen) y 5 librerias
+        self.assertGreaterEqual(len(fuentes), 7)                 # 3 scripts y 4 librerias
         encontradas = []
         for fuente in fuentes:
             with open(fuente, encoding="utf-8") as f:
@@ -229,23 +229,22 @@ class PruebasBloqueMainEnSubproceso(unittest.TestCase):
                 r, segundos = self.lanzar("ensenar", contenido)
                 self.assertEqual(r.returncode, 1, r.stderr)
                 self.assertLess(segundos, 15)
-                self.assertNotIn("Web de control", r.stdout)        # la web se anuncia despues de abrir el simulador
                 self.assertNotIn("pybullet", r.stderr.lower())
 
 
 class PruebasBloqueMainConRunpy(unittest.TestCase):
     """Bloque __main__ ejecutado con runpy. runpy vuelve a definir main(), asi que se parchea lo que main() usa:
-    ur.leer_robots (robots.json de un robot), simulador.visualizar (primaria, tiempo_real) y hmi.HMI (ensenar, que
-    es lo primero que construye main() tras leer el robot y antes de abrir el simulador)."""
+    ur.leer_robots (robots.json de un robot), simulador.visualizar (primaria, tiempo_real) y simulador.Simulador
+    (ensenar, que lo construye tras leer el robot)."""
 
     def lanzar(self, nombre, efecto, leer_robots=None):
-        """Ejecuta el script como __main__ con `efecto` (excepcion) en la primera llamada que hace al simulador/web.
+        """Ejecuta el script como __main__ con `efecto` (excepcion) en la primera llamada que hace al simulador.
         Devuelve (codigo de salida o None si no hubo SystemExit, stdout, stderr)."""
         if leer_robots is None:
             leer_robots = mock.Mock(return_value={"solo": "10.0.0.9"})
         err, out = io.StringIO(), io.StringIO()
         destino = (mock.patch.object(simulador, "visualizar", side_effect=efecto) if nombre != "ensenar"
-                   else mock.patch("hmi.HMI", side_effect=efecto))
+                   else mock.patch.object(simulador, "Simulador", side_effect=efecto))
         codigo = None
         with mock.patch.object(ur, "leer_robots", leer_robots), destino, \
                 mock.patch("builtins.input", side_effect=AssertionError("no debe preguntar")), \

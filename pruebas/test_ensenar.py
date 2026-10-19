@@ -1,37 +1,30 @@
 """
-Pruebas de src/ensenar.py: _ruta, los comandos de la consola y de la web (_comando, ajustar), el estado que ve la web
-(_estado) y main() entero contra el robot falso de las pruebas (127.0.0.1) con un simulador falso (no abre ventana).
+Pruebas de src/ensenar.py: _ruta, los comandos de la consola (_comando, ajustar) y main() entero contra el robot falso
+de las pruebas (127.0.0.1) con un simulador falso (no abre ventana).
 
     python -B -m unittest discover -s 2_practicas\\Practica1_visualizador_UR3e\\pruebas -p test_ensenar.py -v
 
-Los ficheros de secuencias y el robots.json van a carpetas temporales, el puerto del robot es uno libre y webbrowser.open
-esta parcheado: no se toca datos\\ ni se abre nada. La web (hmi.py) es la real, en un puerto libre.
+Los ficheros de secuencias y el robots.json van a carpetas temporales y el puerto del robot es uno libre: no se toca datos\\.
 """
 import contextlib
-import http.client
 import io
 import json
 import os
-import re
 import socket
 import tempfile
 import threading
 import time
 import unittest
 from unittest import mock
-from urllib.parse import urlparse
 
 import ayudas
 import ensenar
-import hmi
 import secuencia
 import ur
 from robot_falso import Q_INICIAL, RobotFalso
 from simulador import ErrorSimulador
 
 Q = [0.0, -1.0, 0.0, -1.0, 0.0, 0.0]            # rad
-CLAVES_ESTADO = {"robot", "conectado", "q", "ejecutando", "protegido", "emergencia", "modo", "fase", "punto",
-                 "puntos", "velocidad", "aceleracion", "limites", "ficheros", "mensajes"}
 
 
 def esperar(condicion, plazo=8.0):
@@ -94,7 +87,7 @@ def simulador_falso(fallar_en=None, error=None):
 
 
 class Base(unittest.TestCase):
-    """Salida capturada, SECUENCIAS en una carpeta temporal y la lista de avisos vacia."""
+    """Salida capturada y SECUENCIAS en una carpeta temporal."""
 
     def setUp(self):
         self.salida = io.StringIO()
@@ -109,7 +102,6 @@ class Base(unittest.TestCase):
         parche = mock.patch.object(ensenar, "SECUENCIAS", self.sec)
         parche.start()
         self.addCleanup(parche.stop)
-        secuencia.mensajes.clear()
 
     def escribir_secuencia(self, nombre, puntos):
         ruta = os.path.join(self.sec, nombre)
@@ -392,97 +384,9 @@ class PruebasAjustar(Base):
         self.assertEqual((self.rep.velocidad, self.rep.aceleracion), (0.2, 0.3))
 
 
-class PruebasEstado(Base):
-    def setUp(self):
-        super().setUp()
-        self.robot = ur.ClienteUR("127.0.0.1")
-        self.rep = secuencia.Reproductor(self.robot, secuencia.Secuencia(), velocidad=0.1, aceleracion=0.2)
-
-    def estado(self, conectado=True):
-        return ensenar._estado(self.rep, self.robot, conectado)
-
-    def test_claves_exactas_y_valores_por_defecto(self):
-        e = self.estado(conectado=False)
-        self.assertEqual(set(e), CLAVES_ESTADO)
-        self.assertEqual(e["robot"], self.robot.destino)
-        self.assertIs(e["conectado"], False)
-        self.assertEqual((e["q"], e["punto"], e["puntos"], e["ficheros"], e["mensajes"]), (None, None, [], [], []))
-        self.assertEqual((e["fase"], e["ejecutando"], e["protegido"], e["emergencia"], e["modo"]),
-                         ("libre", False, False, False, None))
-        self.assertEqual((e["velocidad"], e["aceleracion"]), (0.1, 0.2))
-        self.assertEqual(e["limites"], {"velocidad": [ur.MINIMO, ur.VELOCIDAD_MAX],
-                                        "aceleracion": [ur.MINIMO, ur.ACELERACION_MAX]})
-        self.assertIs(self.estado(conectado=True)["conectado"], True)
-
-    def test_fase_y_punto(self):
-        for fase, esperado in ((None, "libre"), (secuencia.ENVIADO, "enviado"), (secuencia.MOVIENDO, "moviendo"),
-                               (secuencia.PARADA, "parada")):
-            with self.subTest(fase):
-                self.rep.fase = fase
-                self.assertEqual(self.estado()["fase"], esperado)
-        self.rep.i = 0
-        self.assertEqual(self.estado()["punto"], 1)
-        self.rep.i = 2
-        self.assertEqual(self.estado()["punto"], 3)
-        self.rep.i = None
-        self.assertIsNone(self.estado()["punto"])
-
-    def test_refleja_lo_que_dice_el_robot(self):
-        self.rep.procesar({"q": Q, "ejecutando": True, "protegido": True, "emergencia": True, "modo": 7})
-        e = self.estado()
-        self.assertEqual((e["q"], e["ejecutando"], e["protegido"], e["emergencia"], e["modo"]),
-                         (Q, True, True, True, 7))
-
-    def test_q_y_puntos_son_copias(self):
-        self.rep.q = list(Q)
-        self.rep.secuencia.append([0.1] * 6)
-        e = self.estado()
-        e["q"][0] = 9.0
-        e["q"].append(1.0)
-        e["puntos"][0][0] = 9.0
-        e["puntos"].append([0.0] * 6)
-        e["mensajes"].append("x")
-        self.assertEqual(self.rep.q, Q)
-        self.assertEqual(self.rep.secuencia, [[0.1] * 6])
-        self.assertEqual(self.estado()["puntos"], [[0.1] * 6])
-
-    def test_ficheros_lista_los_json_ordenados(self):
-        for nombre in ("b.json", "a.json", "z.txt", "c.json"):
-            with open(os.path.join(self.sec, nombre), "w"):
-                pass
-        self.assertEqual(self.estado()["ficheros"], ["a.json", "b.json", "c.json"])
-
-    def test_sin_carpeta_de_secuencias_no_hay_ficheros(self):
-        with mock.patch.object(ensenar, "SECUENCIAS", os.path.join(self.dir, "no_existe")):
-            self.assertEqual(self.estado()["ficheros"], [])
-
-    def test_mensajes_son_los_30_ultimos(self):
-        for i in range(45):
-            secuencia.avisar("aviso {}".format(i))
-        mensajes = self.estado()["mensajes"]
-        self.assertEqual(len(mensajes), 30)
-        self.assertTrue(mensajes[0].endswith("aviso 15"))
-        self.assertTrue(mensajes[-1].endswith("aviso 44"))
-        self.assertRegex(mensajes[-1], r"^\d\d:\d\d:\d\d aviso 44$")
-        secuencia.mensajes.clear()
-        secuencia.avisar("uno")
-        self.assertEqual(len(self.estado()["mensajes"]), 1)
-
-    def test_se_serializa_con_json(self):
-        self.rep.procesar({"q": Q, "ejecutando": False, "protegido": False, "emergencia": False, "modo": 7})
-        self.rep.secuencia.extend([Q, [0.1] * 6])
-        self.rep.i = 1
-        self.rep.fase = secuencia.PARADA
-        secuencia.avisar("hola")
-        self.escribir_secuencia("a.json", [])
-        e = self.estado()
-        self.assertEqual(json.loads(json.dumps(e)), e)
-        self.assertEqual(json.loads(json.dumps(self.estado(conectado=False)))["conectado"], False)
-
-
 class PruebasMain(Base):
-    """main() entero en un hilo: robot falso en un puerto libre, simulador falso, web real en un puerto libre y una
-    consola de mentira que solo guarda la cola (las ordenes entran con poner() o por HTTP)."""
+    """main() entero en un hilo: robot falso en un puerto libre, simulador falso y una consola de mentira que solo
+    guarda la cola (las ordenes entran con poner())."""
 
     def setUp(self):
         super().setUp()
@@ -494,10 +398,8 @@ class PruebasMain(Base):
         self.robots = os.path.join(self.dir, "robots.json")
         self.escribir_robots([{"nombre": "robot1", "ip": "127.0.0.1"}, {"nombre": "robot2", "ip": "10.255.255.1"}])
         self.cola = None
-        self.web = None
         self.error = None                   # lo que lanzo main()
         self.hilo = None
-        self.navegador = mock.Mock()
 
     def escribir_robots(self, robots):
         with open(self.robots, "w") as f:
@@ -506,7 +408,7 @@ class PruebasMain(Base):
     def consola(self, cola):
         self.cola = cola
 
-    def arrancar(self, sim=None, puerto=None, consola=True, hmi_falso=None):
+    def arrancar(self, sim=None, puerto=None, consola=True):
         """Lanza ensenar.main() en un hilo con todo parcheado. Devuelve la clase del simulador falso."""
         sim = sim or simulador_falso()
         self.sim_clase = sim
@@ -515,8 +417,6 @@ class PruebasMain(Base):
             mock.patch.object(ensenar, "ROBOTS", self.robots),
             mock.patch.object(ur, "PUERTO_PRIMARIA", puerto or self.fake.puerto),
             mock.patch.object(ensenar, "Simulador", sim),
-            mock.patch.object(ensenar.webbrowser, "open", self.navegador),
-            mock.patch.object(ensenar, "HMI", hmi_falso or self.crear_hmi),
         ]
         if consola:
             parches.append(mock.patch.object(ensenar, "_leer_consola", self.consola))
@@ -528,10 +428,6 @@ class PruebasMain(Base):
         self.t0 = time.monotonic()
         self.hilo.start()
         return sim
-
-    def crear_hmi(self, comandos):
-        self.web = hmi.HMI(comandos, puerto=ayudas.puerto_libre())
-        return self.web
 
     def _correr(self):
         try:
@@ -556,37 +452,6 @@ class PruebasMain(Base):
         self.assertTrue(esperar(lambda: self.cola is not None), "main() no arranco la consola")
         self.cola.put(linea)
 
-    def url(self):
-        self.esperar_texto("Web de control: ")
-        return re.search(r"Web de control: (\S+)", self.salida.getvalue()).group(1)
-
-    def http(self, metodo, ruta, cuerpo=None, token=True, tipo="application/json"):
-        """Peticion a la web de main(). Devuelve (codigo, texto)."""
-        partes = urlparse(self.url())
-        conexion = http.client.HTTPConnection("127.0.0.1", partes.port, timeout=5)
-        try:
-            cabeceras = {"Content-Type": tipo} if cuerpo is not None else {}
-            conexion.request(metodo, ruta + (partes.query and "?" + partes.query if token else ""), cuerpo, cabeceras)
-            respuesta = conexion.getresponse()
-            return respuesta.status, respuesta.read().decode("utf-8")
-        finally:
-            conexion.close()
-
-    def estado(self):
-        codigo, texto = self.http("GET", "/estado")
-        self.assertEqual(codigo, 200)
-        return json.loads(texto)
-
-    def esperar_estado(self, condicion, plazo=8.0):
-        resultado = {}
-
-        def comprobar():
-            resultado["e"] = self.estado()
-            return condicion(resultado["e"])
-        self.assertTrue(esperar(comprobar, plazo), "estado inesperado: {}\nSalida:\n{}".format(
-            resultado.get("e"), self.salida.getvalue()))
-        return resultado["e"]
-
     def terminar(self, plazo=10.0):
         """Espera a que main() acabe y comprueba que no quedan hilos suyos."""
         self.hilo.join(plazo)
@@ -609,9 +474,6 @@ class PruebasMain(Base):
         self.poner("e")
         self.esperar_texto("Secuencia terminada")
         self.esperar_orden("movej")
-        e = self.esperar_estado(lambda e: e["fase"] == "libre" and e["punto"] is None)
-        self.assertEqual(e["puntos"], [Q_INICIAL])
-        self.assertTrue(e["conectado"])
         self.poner("s guardada")
         self.esperar_texto("1 puntos guardados en guardada.json")
         with open(os.path.join(self.sec, "guardada.json")) as f:
@@ -623,10 +485,6 @@ class PruebasMain(Base):
         creado = sim.creados[0]
         self.assertEqual((creado.robots, creado.movidos, creado.cerrado), (["robot1"], {"robot1"}, True))
         self.assertIn("Conectado a 127.0.0.1:{}".format(self.fake.puerto), self.salida.getvalue())
-        self.navegador.assert_called_once()
-        self.assertEqual(self.navegador.call_args[0][0], self.url())
-        with self.assertRaises(OSError):                            # la web se cerro con main()
-            self.http("GET", "/estado")
 
     def test_secuencia_de_dos_puntos_mueve_el_robot_y_termina(self):
         lejos = list(Q_INICIAL)
@@ -707,10 +565,10 @@ class PruebasMain(Base):
         self.esperar_texto("Secuencia interrumpida en el punto 1")
         self.esperar_texto("Conectado a", veces=2)                  # y vuelve a conectar
         self.assertIn("NO SE HA PODIDO ENVIAR LA PARADA", self.salida.getvalue())     # sin conexion no se pudo frenar
-        e = self.esperar_estado(lambda e: e["conectado"] and e["fase"] == "parada")
-        self.assertEqual(e["punto"], 1)
+        self.poner("e")                                             # en parada solo valen 'c', 'r' y 'q'
+        self.esperar_texto("Secuencia en marcha o parada")
         self.poner("c")
-        self.esperar_estado(lambda e: e["fase"] == "libre")
+        self.esperar_texto("Cancelado")
         self.poner("q")
         self.terminar()
         self.assertIsNone(self.error)
@@ -726,10 +584,9 @@ class PruebasMain(Base):
         self.assertIn("Conexion perdida", self.salida.getvalue())
         self.assertNotIn("Conectado a", self.salida.getvalue())
 
-    def test_con_el_robot_caido_la_web_dice_desconectado_y_sigue_atendida(self):
+    def test_con_el_robot_caido_la_consola_sigue_atendida(self):
         self.arrancar(puerto=ayudas.puerto_libre())
-        e = self.esperar_estado(lambda e: e["conectado"] is False and e["mensajes"])
-        self.assertEqual(set(e) - {"t", "historial"}, CLAVES_ESTADO)
+        self.esperar_texto("Conexion perdida")
         self.poner("zzz")                                           # mientras reintenta atiende las ordenes
         self.esperar_texto(ensenar.AYUDA, veces=1)
         self.poner("q")
@@ -751,63 +608,6 @@ class PruebasMain(Base):
         self.assertIsNone(self.error)
         self.assertTrue(sim.creados[0].cerrado)
 
-    # ---- web ----
-    def test_la_web_muestra_el_estado_y_acepta_ordenes(self):
-        self.arrancar()
-        e = self.esperar_estado(lambda e: e["conectado"] and e["q"] is not None)
-        self.assertEqual(e["robot"], "127.0.0.1:{}".format(self.fake.puerto))
-        self.assertEqual((e["fase"], e["puntos"], e["punto"]), ("libre", [], None))
-        self.assertEqual((e["velocidad"], e["aceleracion"]), (ensenar.VELOCIDAD, ensenar.ACELERACION))
-        codigo, _ = self.http("POST", "/orden", json.dumps({"linea": "g"}))
-        self.assertEqual(codigo, 200)
-        e = self.esperar_estado(lambda e: len(e["puntos"]) == 1)
-        self.assertEqual(e["puntos"], [Q_INICIAL])
-        codigo, _ = self.http("POST", "/orden", json.dumps({"linea": "ajustar 0.2 0.3"}))
-        self.assertEqual(codigo, 200)
-        e = self.esperar_estado(lambda e: e["velocidad"] == 0.2)
-        self.assertEqual(e["aceleracion"], 0.3)
-        self.http("POST", "/orden", json.dumps({"linea": "q"}))     # la web tambien puede cerrar el programa
-        self.terminar()
-        self.assertIsNone(self.error)
-
-    def test_la_web_rechaza_peticiones_sin_token_o_mal_formadas(self):
-        self.arrancar()
-        self.esperar_estado(lambda e: e["conectado"])
-        self.assertEqual(self.http("GET", "/estado", token=False)[0], 403)
-        self.assertEqual(self.http("POST", "/orden", json.dumps({"linea": "g"}), token=False)[0], 403)
-        self.assertEqual(self.http("POST", "/orden", json.dumps({"linea": 3}))[0], 400)
-        self.assertEqual(self.http("POST", "/orden", "g", tipo="text/plain")[0], 415)
-        self.poner("q")
-        self.terminar()
-        self.assertNotIn("Punto 1 guardado", self.salida.getvalue())       # ninguna de las ordenes malas llego
-
-    def test_si_la_web_no_arranca_se_sigue_con_la_consola(self):
-        class WebRota:
-            def __init__(self, comandos):
-                self.detenida = False
-
-            def iniciar(self):
-                raise OSError("puerto ocupado")
-
-            def publicar(self, estado):
-                pass
-
-            def detener(self):
-                self.detenida = True
-
-        webs = []
-        sim = self.arrancar(hmi_falso=lambda comandos: webs.append(WebRota(comandos)) or webs[-1])
-        self.poner("g")
-        self.esperar_texto("Punto 1 guardado")
-        self.poner("q")
-        self.terminar()
-        self.assertIsNone(self.error)
-        self.assertIn("La web no esta disponible (puerto ocupado); se sigue con la consola", self.salida.getvalue())
-        self.assertNotIn("Web de control", self.salida.getvalue())
-        self.navegador.assert_not_called()
-        self.assertTrue(webs[0].detenida)
-        self.assertTrue(sim.creados[0].cerrado)
-
     # ---- arranque ----
     def test_usa_el_primer_robot_del_json(self):
         sim = self.arrancar()
@@ -821,9 +621,7 @@ class PruebasMain(Base):
         self.terminar()
         self.assertIsInstance(self.error, ValueError)
         self.assertIn(self.robots, str(self.error))
-        self.assertEqual(self.sim_clase.creados, [])                # ni ventana ni web
-        self.assertIsNone(self.web)
-        self.navegador.assert_not_called()
+        self.assertEqual(self.sim_clase.creados, [])                # ni ventana
 
     def test_ip_mala_en_el_json_falla_antes_de_abrir_nada(self):
         self.escribir_robots([{"nombre": "robot1", "ip": "no-es-una-ip"}])

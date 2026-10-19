@@ -1,19 +1,17 @@
 """
 Prueba de humo de extremo a extremo: lanza src\\primaria.py, src\\tiempo_real.py y src\\ensenar.py de verdad (con la ventana
-REAL de PyBullet) contra robots falsos de pruebas/robot_falso.py y comprueba lo que imprimen, y la web de ensenar.py por
-HTTP. Abre una ventana de PyBullet unos 4 s por script.
+REAL de PyBullet) contra robots falsos de pruebas/robot_falso.py y comprueba lo que imprimen.
+Abre una ventana de PyBullet unos 4 s por script.
 Envia movej solo al ROBOT FALSO (puertos 31xxx), nunca a URSim ni a un robot.
 
     python -u 2_practicas\\Practica1_visualizador_UR3e\\pruebas\\humo_extremo_a_extremo.py
 
 Los scripts no tienen argumentos y el JSON de robots no lleva puertos, asi que cada script se arranca con un lanzador:
-cambia el puerto de ur.py y las rutas de datos/ del script (ROBOTS, SECUENCIAS) y no abre el navegador. El resto es el script tal cual.
+cambia el puerto de ur.py y las rutas de datos/ del script (ROBOTS, SECUENCIAS) El resto es el script tal cual.
 """
-import http.client
 import json
 import math
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -33,8 +31,6 @@ src, script, puerto, robots, secuencias = sys.argv[1:6]
 sys.path.insert(0, os.path.join(src, "librerias"))
 import ur
 ur.PUERTO_PRIMARIA = ur.PUERTO_TIEMPO_REAL = int(puerto)
-import webbrowser
-webbrowser.open = lambda *a, **k: False
 spec = importlib.util.spec_from_file_location(script, os.path.join(src, script + ".py"))
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)          # no ejecuta el bloque __main__ del script
@@ -141,29 +137,13 @@ def prueba_dos_robots(nombre, script, formato):
     comprobar(any("[r1]" in l and str(grados(Q_INICIAL)) in l for l in lineas), "r1 imprime su q")
     comprobar(any("[r2]" in l and str(grados(q2)) in l for l in lineas), "r2 imprime su q")
     comprobar(not any("Traceback" in l for l in lineas), "sin Traceback")
-
-
-def http_json(url, metodo="GET", cuerpo=None, token=None, host=None):
-    """Una peticion a la web de ensenar.py: devuelve (codigo, json o texto)."""
-    base, _, _ = url.partition("/?t=")
-    anfitrion = base.replace("http://", "")
-    conexion = http.client.HTTPConnection(anfitrion, timeout=5)
-    ruta = ("/estado" if metodo == "GET" else "/orden") + "?t=" + (token if token is not None else url.split("?t=")[1])
-    cabeceras = {"Content-Type": "application/json"} if cuerpo is not None else {}
-    if host:
-        cabeceras["Host"] = host
-    conexion.request(metodo, ruta, json.dumps(cuerpo) if cuerpo is not None else None, cabeceras)
-    respuesta = conexion.getresponse()
-    datos = respuesta.read().decode("utf-8")
-    conexion.close()
-    try:
-        return respuesta.status, json.loads(datos)
-    except ValueError:
-        return respuesta.status, datos
+    if FALLOS:
+        t = next((i for i, l in enumerate(lineas) if "Traceback" in l), 0)         # desde el primer Traceback
+        print("    salida:", [l for l in lineas[t:] if l and "b3Printf" not in l][:25])
 
 
 def prueba_ensenar():
-    print("ensenar (consola: ajustar, g, l, v, e, q; web: estado y ordenes por HTTP)")
+    print("ensenar (consola: ajustar, g, l, v, e, q)")
     fake = RobotFalso(ayudas.puerto_libre()).iniciar()
     destino = [Q_INICIAL[0] + 0.2] + Q_INICIAL[1:]
     with tempfile.TemporaryDirectory() as d:
@@ -174,32 +154,12 @@ def prueba_ensenar():
         proceso, lineas = lanzar("ensenar", fake.puerto, escribir_robots(d, [("robot1", "127.0.0.1")]), secuencias)
         esperar(lineas, lambda l: l.startswith("Conectado a"))
 
-        # la web: URL con token que imprime el programa
-        url = next((m.group(1) for l in lineas for m in [re.search(r"Web de control: (\S+)", l)] if m), None)
-        comprobar(url is not None, "el programa imprime la URL de la web de control")
-        if url:
-            for _ in range(200):                                       # hasta que llegue el primer estado del robot
-                codigo, estado = http_json(url)
-                if codigo == 200 and estado.get("conectado") is True and estado.get("q"):
-                    break
-                time.sleep(0.2)
-            comprobar(codigo == 200 and estado.get("conectado") is True and len(estado.get("q") or []) == 6,
-                      "GET /estado: conectado y con los 6 q")
-            comprobar(http_json(url, token="mal")[0] == 403, "sin el token correcto la web responde 403")
-            comprobar(http_json(url, host="evil.com")[0] == 403, "con otra cabecera Host la web responde 403")
-            comprobar(http_json(url, "POST", {"linea": "g"})[0] == 200, "POST /orden g: aceptada")
-            esperar(lineas, lambda l: "Punto 1 guardado" in l)
-            time.sleep(0.5)
-            comprobar(len(http_json(url)[1]["puntos"]) == 1, "la orden de la web guarda un punto")
-            http_json(url, "POST", {"linea": "b"})                       # b: borra, para seguir como antes
-            esperar(lineas, lambda l: "Secuencia borrada" in l)
-
         escribir(proceso, "ajustar 0.5 0.5")                     # por encima del limite de 0,3 rad/s: no cambia
         esperar(lineas, lambda l: "No se cambia" in l)
         escribir(proceso, "ajustar 0.3 0.5")                     # el limite exacto
         esperar(lineas, lambda l: l.startswith("Velocidad 0.3"))
         escribir(proceso, "g")                                   # guarda el punto actual
-        esperar(lineas, lambda l: l == "Punto 1 guardado" and lineas.count(l) >= 2)       # la segunda vez (la 1.a fue por la web)
+        esperar(lineas, lambda l: l == "Punto 1 guardado")
         escribir(proceso, "l puntos")                            # carga una secuencia de 1 punto (reemplaza)
         esperar(lineas, lambda l: "1 puntos cargados" in l)
         escribir(proceso, "v", 2)                                # previsualiza (1 s)
