@@ -110,7 +110,12 @@ def _crear_manejador(hmi):
                 self._responder(404, "text/plain; charset=utf-8", "No existe")
 
         def do_POST(self):
-            if not self._autorizado():
+            try:
+                largo = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                largo = 0
+            cuerpo = self.rfile.read(max(0, min(largo, 1000)))      # se lee SIEMPRE, antes de responder: si se cierra con
+            if not self._autorizado():                              # datos sin leer, Windows reinicia la conexion y el cliente pierde la respuesta
                 return
             if urlparse(self.path).path != "/orden":
                 self._responder(404, "text/plain; charset=utf-8", "No existe")
@@ -118,8 +123,7 @@ def _crear_manejador(hmi):
                 self._responder(415, "text/plain; charset=utf-8", "Solo application/json")
             else:
                 try:
-                    largo = int(self.headers.get("Content-Length", "0"))
-                    linea = json.loads(self.rfile.read(min(largo, 1000)).decode("utf-8"))["linea"]
+                    linea = json.loads(cuerpo.decode("utf-8"))["linea"]
                     if not isinstance(linea, str) or not linea.strip() or len(linea) > MAX_ORDEN or "\n" in linea:
                         raise ValueError("orden no valida")
                 except (ValueError, KeyError, TypeError):

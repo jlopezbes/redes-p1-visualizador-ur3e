@@ -150,7 +150,7 @@ class TestEstadoYPublicar(BaseHMI):
     def test_publicar_recorta_del_historial_lo_anterior_a_la_ventana(self):
         with mock.patch.object(hmi, "VENTANA", 0.3):
             self.web.publicar({"q": Q6})
-            time.sleep(0.4)
+            time.sleep(0.5)                     # en Windows sleep(0.4) puede durar 0.39 s medidos con monotonic
             self.web.publicar({"q": Q6})
             historial = self.web._instantanea()["historial"]
         self.assertEqual(len(historial), 1)
