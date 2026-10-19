@@ -2,7 +2,7 @@
 
 El profesor valora sobre todo saber depurar: cada fallo real queda como caso. Numeración fija F1, F2… con el más reciente arriba.
 
-Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F6 es de la fase 1 de `src/`; F7–F10 son de la revisión de robustez de la capa 1 (`red.py`) y F11–F14 de la capa 2 (`ur.py`) F15–F19 de la capa 3 (`secuencia.py`, `simulador.py`) F20 de la capa 4 (`main.py`, `tareas.py`) y F21 de la ejecución real con ventana tras las cuatro capas. **F27–F29 son de la primera ejecución en Windows del prototipo (2026-10-19); F25–F27 describen la web, retirada ese mismo día (D27): se conservan como lección.** **F25–F26 son de la web de control (2026-10-17).** **F22–F24 son de la limpieza por capas (2026-10-16).** Cada uno dice qué se ejecutó y qué solo se leyó.
+Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F6 es de la fase 1 de `src/`; F7–F10 son de la revisión de robustez de la capa 1 (`red.py`) y F11–F14 de la capa 2 (`ur.py`) F15–F19 de la capa 3 (`secuencia.py`, `simulador.py`) F20 de la capa 4 (`main.py`, `tareas.py`) y F21 de la ejecución real con ventana tras las cuatro capas. **F30 es del primer Ubuntu (2026-10-19). F27–F29 son de la primera ejecución en Windows del prototipo (2026-10-19); F25–F27 describen la web, retirada ese mismo día (D27): se conservan como lección.** **F25–F26 son de la web de control (2026-10-17).** **F22–F24 son de la limpieza por capas (2026-10-16).** Cada uno dice qué se ejecutó y qué solo se leyó.
 
 **Qué casos describen código que la limpieza (D17–D21) ya cambió.** Se conservan como historia y como lección; el fallo que explican ya no puede ocurrir o se evita de otra forma:
 
@@ -18,6 +18,14 @@ Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F
 | F18, F19 | sin topes de fichero ni guardado atómico; el simulador no valida `q` ni posiciones |
 | F20 | `with Simulador()` → `try/finally`; el resto vale |
 | F21 | sigue valiendo (la consola se lee después de abrir la ventana) |
+
+## F30 – En Ubuntu, `iniciar.sh` no podía crear el entorno: Python 3.14 y `pybullet` sin binarios (2026-10-19, `iniciar.sh`)
+
+- **Síntoma (Josu, Ubuntu nuevo):** primero `ensurepip is not available` (falta `python3.14-venv`); instalado eso, `pip install` falla con `numpy` en `Unknown compiler(s): cc, gcc, clang…`.
+- **Aislamiento:** ✅ leído del log de Josu y contrastado con PyPI (`pybullet` 3.2.7: binarios Linux solo hasta `cp311`; `numpy`/`scipy` actuales sí tienen `cp314`, pero el pin `numpy<2` no).
+- **Causa:** el script daba por bueno el `python3` del sistema y fijaba versiones viejas; con un Python más nuevo que el de las ruedas, `pip` compila, y no hay compilador.
+- **Arreglo:** el entorno se crea con `uv` y Python 3.11 propio (D28): no depende del Python del sistema, ni de `sudo`, ni de un compilador.
+- **Lección:** «Python 3.9 o superior» no basta: hay que mirar hasta qué versión publican binarios las dependencias; y nunca se supo que Ubuntu iba con 3.14 hasta probar en un PC real.
 
 ## F29 – El segundo robot se quedaba en la pose por defecto y no se movía, mientras la consola decía que recibía datos (2026-10-19, `src/librerias/red.py`)
 

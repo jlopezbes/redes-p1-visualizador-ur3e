@@ -261,11 +261,11 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Distinto:** sí, respecto a D24 (la sustituye).
 - **Commit:** pendiente.
 
-## D28 – Linux: `iniciar.sh` con un `venv` que se crea la primera vez (2026-10-19)
+## D28 – Linux: `iniciar.sh` con `uv` y un Python 3.11 propio que se crea la primera vez (2026-10-19)
 
 - **Contexto:** se ha sabido que la práctica debe ejecutarse en Windows y en Linux.
-- **Opciones:** (a) un entorno embebido también en Linux; (b) `iniciar.sh` que crea un `venv` en `entorno/` e instala `requirements-linux.txt` la primera vez; (c) exigir que el usuario instale las dependencias a mano.
-- **Elegida:** (b). En Linux, `pybullet` sí tiene ruedas, así que `pip` basta; en Windows no (D26). La rueda de `UR3e_rg2` (para Python ≥ 3.9) se copia a `recursos/` para que la carpeta de la práctica sea autónoma. Mismo menú y mismos argumentos que `iniciar.bat`.
-- **Se pierde / riesgo:** la primera vez hace falta internet y `python3` ≥ 3.9 con `venv`; no hay un «entorno ya montado» como en Windows. **No está probado en Linux** (no hay Linux ni WSL aquí): sin ejecutar ni `bash -n`. El código Python no tiene nada específico de Windows (sin `msvcrt`, `os.name` ni rutas fijas) y la Pi ejecutó las pruebas de la versión anterior en Linux (T14), pero no `iniciar.sh`, ni la instalación de `pybullet_planning` con la `scipy` de allí (se fija `scipy<1.13` y `numpy<2` por prudencia).
+- **Opciones:** (a) un entorno embebido también en Linux; (b) `iniciar.sh` que crea un `venv` con el `python3` del sistema; (c) `iniciar.sh` que usa `uv` para crear el entorno con un Python 3.11 propio; (d) exigir que el usuario instale las dependencias a mano.
+- **Elegida:** (c), tras fallar (b) en el primer PC con Ubuntu (2026-10-19): la versión de Ubuntu traía **Python 3.14**, y `pybullet` solo publica binarios para Linux hasta **Python 3.11** (con 3.12 o más hay que compilarlo, y no había `gcc`; `numpy<2` también intentó compilarse, F30). `uv` (un solo fichero, se instala sin `sudo` con `curl -LsSf https://astral.sh/uv/install.sh | sh`) descarga un Python 3.11 y crea `entorno/` con él; no importa qué Python traiga el sistema. La rueda de `UR3e_rg2` (Python ≥ 3.9) se copia a `recursos/` para que la carpeta sea autónoma. Mismo menú y argumentos que `iniciar.bat`; se lanza con `bash iniciar.sh` desde una terminal.
+- **Se pierde / riesgo:** la primera vez hace falta internet y `uv`; no hay un «entorno ya montado» como en Windows. El script nuevo (con `uv`) **no se ha ejecutado en Linux** (no hay Linux ni WSL aquí); la causa del fallo anterior sí se vio en un Ubuntu real (log de Josu). El código Python no tiene nada específico de Windows (sin `msvcrt`, `os.name` ni rutas fijas) y la Pi ejecutó las pruebas de la versión anterior en Linux (T14), pero no `iniciar.sh`, ni la instalación de `pybullet_planning` con la `scipy` de allí (se fija `scipy<1.13` y `numpy<2` por prudencia).
 - **Distinto:** sí, el enunciado no lo pide; es un requisito nuevo del profesor, de segunda mano.
 - **Commit:** pendiente.

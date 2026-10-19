@@ -35,7 +35,7 @@ Límites obligatorios en el robot real: **0,3 rad/s y 0,5 rad/s²**, secuencia p
 
 **En Windows, en cualquier PC (portable, D26):** doble clic en [iniciar.bat](iniciar.bat). Menú: 1 `primaria`, 2 `tiempo_real`, 3 `ensenar` (pide confirmación: envía `movej`), 4 abre `datos\robots.json` para cambiar las IP, 5 salir. También `iniciar.bat primaria|tiempo_real|ensenar` sin menú. Usa el Python de la carpeta `entorno\` (nada que instalar); si no existe, usa el `python` del PC. El entorno se crea con `powershell -ExecutionPolicy Bypass -File herramientas\crear_entorno.ps1` (raíz del repo; ver [docs/entorno.md](../../docs/entorno.md)) y para entregar se comprime esta carpeta entera con `entorno\` dentro.
 
-**En Linux (D28, sin probar):** `./iniciar.sh` (misma interfaz: menú o `./iniciar.sh primaria|tiempo_real|ensenar`). La primera vez crea un `venv` en `entorno/` e instala [requirements-linux.txt](requirements-linux.txt) (necesita `python3` ≥ 3.9 con `venv` e internet); la rueda de `UR3e_rg2` viaja en `recursos/`. Si no es ejecutable: `chmod +x iniciar.sh`.
+**En Linux (D28, sin probar con la versión actual):** desde una terminal, `bash iniciar.sh` (misma interfaz: menú o `bash iniciar.sh primaria|tiempo_real|ensenar`). La primera vez crea `entorno/` con `uv` y un Python 3.11 propio e instala [requirements-linux.txt](requirements-linux.txt) (necesita internet y `uv`: `curl -LsSf https://astral.sh/uv/install.sh | sh`; no hace falta `sudo`); la rueda de `UR3e_rg2` viaja en `recursos/`.
 
 **Con el Python del PC** (desarrollo). Entorno (Python 3.7.5, URSim, puertos): [docs/entorno.md](../../docs/entorno.md). Desde la raíz del repo, en PowerShell 5.1. Los scripts no tienen argumentos y funcionan lancen desde donde se lancen (las rutas son relativas al script):
 
