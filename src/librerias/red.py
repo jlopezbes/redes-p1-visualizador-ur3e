@@ -11,6 +11,7 @@ Los fallos de red salen SIEMPRE como ErrorRed: ninguna capa de arriba necesita c
 dice con quien y por que. ErrorRedTimeout (que es un ErrorRed) significa "nadie contesta a tiempo". Una IP o un puerto
 mal escritos salen como ValueError al crear el objeto, antes de tocar la red.
 """
+import encodings.idna  # noqa: F401  Python lo carga al primer connect(); si dos hilos conectan a la vez (un hilo por robot) uno falla con "unknown encoding: idna"
 import ipaddress
 import socket
 
