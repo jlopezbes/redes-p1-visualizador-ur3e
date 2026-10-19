@@ -74,7 +74,7 @@ Una sola excepción de comunicación, `ErrorRed` (D19): `ur.py` la deja pasar ta
 
 **No hay noción de «dato fresco»** (D20): si el robot calla, `recibir` da `ErrorRedTimeout` a los `TIMEOUT_LECTURA` s, el cliente reconecta y `HiloLectorUR.q` pasa a `None`; `movej` no depende del último estado porque lleva ángulos absolutos.
 
-**`HiloLectorUR`:** atributos `q` (último `q`, 6 ángulos en rad, o `None` sin conexión), `ultimo_error` (texto o `None`) y `recibidos` (contador, para los estados por segundo); método `detener()` (cierra el socket y espera hasta 3 s). Un solo hilo los escribe y el resto solo los lee: no hace falta `Lock`. El motivo de una desconexión se escribe una vez, no en cada reintento.
+**`HiloLectorUR`:** atributos `q` (último `q`, 6 ángulos en rad, o `None` sin conexión), `ultimo_error` (texto o `None`) y `recibidos` (contador, para los estados por segundo); método `detener()` (cierra el socket y espera hasta 3 s). Un solo hilo los escribe y el resto solo los lee. `q` se escribe y se lee siempre dentro de `with cerrojo:` (`cerrojo = threading.Lock()`, atributo de `HiloLectorUR`; D29): el hilo lo toma en `run()` en los dos sitios donde asigna `q` (un estado nuevo y `None` al desconectar) y `visualizar` lo toma en sus dos lecturas. Dentro del `with` solo hay una asignación o una copia de la referencia, así que el cerrojo se mantiene un instante. `ultimo_error` y `recibidos` **no** llevan cerrojo (son un texto/entero que se reasigna entero y solo se usan para mostrar). El motivo de una desconexión se escribe una vez, no en cada reintento.
 
 ## Errores de la secuencia y del simulador (contrato de `secuencia.py` y `simulador.py`)
 
@@ -102,7 +102,7 @@ Fases del `Reproductor`: `LIBRE`, `ENVIADO` (se envió un `movej` y aún no se v
 
 | Tarea | Hilos | Qué comparten y cómo |
 |---|---|---|
-| `primaria.py` / `tiempo_real.py` (`visualizar`) | un `HiloLectorUR` por robot + el hilo principal | Cada hilo guarda solo el **último `q`** en su atributo `q`; el hilo principal lo lee y dibuja 30 veces por segundo, sin bloquearse aunque un robot tarde en contestar. Si el robot se cae, `q` pasa a `None` y el robot simulado se queda quieto. |
+| `primaria.py` / `tiempo_real.py` (`visualizar`) | un `HiloLectorUR` por robot + el hilo principal | Cada hilo guarda solo el **último `q`** en su atributo `q` (con `with cerrojo:`, D29); el hilo principal lo lee y dibuja 30 veces por segundo, sin bloquearse aunque un robot tarde en contestar. Si el robot se cae, `q` pasa a `None` y el robot simulado se queda quieto. |
 | `ensenar.py` | hilo principal + un hilo que lee la consola | La consola solo mete líneas de texto en una `queue.Queue`; el principal lee los mensajes del robot, atiende los comandos y dibuja. No usa `HiloLectorUR`: necesita todos los mensajes (errores, `isProgramRunning`). |
 
 **PyBullet se toca solo desde el hilo principal** (no es seguro entre hilos). Los hilos terminan con `detener()` y son `daemon`: no impiden salir con Ctrl+C. Al salir de `visualizar` y de `ensenar.main`, un `try/finally` frena el robot si hace falta, detiene los hilos y cierra la ventana, en ese orden.
