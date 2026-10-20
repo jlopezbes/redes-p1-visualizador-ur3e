@@ -67,6 +67,7 @@ class Reproductor:
         self.i = None                 # indice del punto en curso
         self.fase = LIBRE
         self.t_envio = 0.0            # s (time.monotonic) del ultimo movej enviado
+        self.reconectar = False       # el robot rechazo una orden: hay que abrir otra conexion (la lee quien lleva el socket)
 
     @property
     def ocupado(self):
@@ -140,7 +141,7 @@ class Reproductor:
         if "error" in datos:
             print("ERROR del robot: " + datos["error"])
             if self.ocupado:
-                self._fallar(datos["error"])
+                self._fallar(datos["error"], frenar=not datos.get("rechazada"))
             return
         if "q" in datos:
             self.q = datos["q"]
@@ -188,8 +189,14 @@ class Reproductor:
         else:
             print("Robot detenido.")
 
-    def _fallar(self, motivo):
+    def _fallar(self, motivo, frenar=True):
+        """frenar=False solo si el robot ha rechazado el movej (modo Local): no se mueve y un stopj tambien se rechazaria."""
         print("*** FALLO DE LA SECUENCIA: {}".format(motivo))
-        self._parar_robot()
+        if frenar:
+            self._parar_robot()
+        else:
+            print("El robot no ha aceptado la orden: no se ha movido. Se vuelve a conectar (si ya estaba en Control remoto, "
+                  "la conexion antigua seguia de solo lectura).")
+            self.reconectar = True
         self.fase = PARADA
         print("Escribe 'r' para reanudar desde el punto {} o 'c' para cancelar".format((self.i or 0) + 1))

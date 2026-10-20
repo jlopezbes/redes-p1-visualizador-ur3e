@@ -72,10 +72,19 @@ class PruebasDecodificarPrimaria(unittest.TestCase):
         self.assertIn("251", str(e.exception))
 
     def test_error_codigo(self):
-        cuerpo = struct.pack(">5i", 123, 0, 2, 0, 0) + b"Fallo de prueba"
-        texto = self.cliente._decodificar(ayudas.mensaje_robot(6, cuerpo))["error"]
+        texto = self.cliente._decodificar(ayudas.mensaje_error(123, b"Fallo de prueba"))["error"]
         self.assertIn("123", texto)
         self.assertIn("Fallo de prueba", texto)
+
+    def test_error_codigo_lleva_el_argumento_y_el_texto_entero(self):
+        datos = self.cliente._decodificar(ayudas.mensaje_error(123, b"Fallo", argumento=4))
+        self.assertIn("(C123A4): Fallo", datos["error"])
+        self.assertNotIn("rechazada", datos)
+
+    def test_error_210_es_orden_rechazada_por_modo_local(self):
+        datos = self.cliente._decodificar(ayudas.mensaje_error(ur.CODIGO_SIN_REMOTO))
+        self.assertTrue(datos["rechazada"])
+        self.assertIn("solo lectura", datos["error"])
 
     def test_error_excepcion_de_programa(self):
         cuerpo = struct.pack(">2i", 7, 3) + b"Excepcion"
@@ -232,7 +241,7 @@ class PruebasClienteConRed(unittest.TestCase):
 
     def test_primaria_ignora_la_version_y_entrega_estado_y_errores(self):
         q2 = [0.1] * 6
-        error = ayudas.mensaje_robot(6, struct.pack(">5i", 5, 0, 2, 0, 0) + b"Colision")
+        error = ayudas.mensaje_error(5, b"Colision")
         srv = ayudas.ServidorSecuencial(servir_trozos(
             ayudas.mensaje_robot(3, b"version"), ayudas.mensaje_estado(q2), error))
         self.addCleanup(srv.cerrar)

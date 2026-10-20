@@ -57,6 +57,10 @@ class ConexionTCP:
         """Cierra la conexion. Se puede llamar varias veces y desde otro hilo (el hilo que lee recibe ErrorRed)."""
         sock, self._socket = self._socket, None
         if sock is not None:
+            try:
+                sock.shutdown(socket.SHUT_RDWR)         # en Linux close() no despierta a un recv() de otro hilo; shutdown() si
+            except OSError:                             # ya cerrado por el otro lado
+                pass
             sock.close()
 
     def enviar(self, datos):

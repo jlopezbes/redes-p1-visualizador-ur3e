@@ -36,6 +36,11 @@ def mensaje_robot(subtipo, cuerpo):
     return struct.pack(">iB", len(datos) + 5, 20) + datos
 
 
+def mensaje_error(codigo, texto=b"", argumento=0):
+    """Mensaje tipo 20, subtipo 6: code, argument, reportLevel (3 x int32), dataType (uint8), data (uint32) y texto."""
+    return mensaje_robot(6, struct.pack(">3iBI", codigo, argumento, 2, 0, 0) + texto)
+
+
 def paquete_tiempo_real(q, longitud=1116):
     """Paquete de la interfaz de tiempo real: longitud en los 4 primeros bytes y q_actual en el byte 252."""
     paquete = bytearray(longitud)

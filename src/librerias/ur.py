@@ -48,6 +48,8 @@ MINIMO = 0.001          # rad/s y rad/s2: por debajo Python escribiria 1e-05 y n
 
 MAX_IGNORADOS = 100     # paquetes seguidos sin ningun dato util: se supone puerto o interfaz equivocados
 
+CODIGO_SIN_REMOTO = 210  # C210: el robot rechaza las ordenes de esta conexion (verificado en un UR real: conexion abierta en Local sigue rechazando tras pasar a remoto)
+
 REINTENTO = 2.0         # s entre intentos de reconexion
 
 
@@ -112,7 +114,8 @@ class ClienteUR:
     # ---------- lo que dice el robot ----------
     def mensajes(self):
         """Generador de lo que dice el robot, un dict por mensaje: 'q' (6 q_actual, rad) y, solo en la primaria, 'ejecutando',
-        'protegido', 'emergencia' y 'modo'; o {'error': texto} si el robot informa de un error. Lanza ErrorRed."""
+        'protegido', 'emergencia' y 'modo'; o {'error': texto} si el robot informa de un error ('rechazada': True si
+        no ha aceptado la orden por estar en modo Local). Lanza ErrorRed."""
         ignorados = 0
         while True:
             self._buffer += self.red.recibir()
@@ -178,16 +181,23 @@ class ClienteUR:
 
     def _leer_error(self, paquete):
         """Mensaje tipo 20 -> {'error': texto} si es un error (robotMessageType 6 o 10), o {} para cualquier otro.
+        Si el robot ha rechazado la orden por estar en modo Local (C210) anade 'rechazada': True: no se ha movido.
         Cualquier error o excepcion del robot cuenta, sea cual sea su reportLevel (parar es lo seguro)."""
         # cabecera 5 + timestamp 8 + source 1 + robotMessageType 1 = 15
         if len(paquete) < 15 or paquete[14] not in (6, 10):
             return {}
         try:
-            numero = struct.unpack(">i", paquete[15:19])[0]
+            numero, argumento = struct.unpack(">ii", paquete[15:23])
         except struct.error as e:
             raise ErrorRed("mensaje de error del robot cortado: {}".format(e)) from e
-        if paquete[14] == 6:       # error code: code, argument, reportLevel, dataType, data (5 x int32) y texto
-            return {"error": "error del robot (codigo {}): {}".format(numero, paquete[35:].decode("ascii", "replace"))}
+        if paquete[14] == 6:
+            # error code: code, argument, reportLevel (3 x int32), dataType (uint8), data (uint32) y texto desde el byte 32
+            if numero == CODIGO_SIN_REMOTO:
+                return {"error": "el robot rechaza las ordenes (C{}A{}): conexion de solo lectura (modo Local, o conexion "
+                                 "abierta antes de pasar a Control remoto)".format(numero, argumento),
+                        "rechazada": True}
+            return {"error": "error del robot (C{}A{}): {}".format(
+                numero, argumento, paquete[32:].decode("ascii", "replace").strip("\x00 "))}
         # excepcion de programa: linea, columna (2 x int32) y texto
         return {"error": "excepcion de programa (linea {}): {}".format(numero, paquete[23:].decode("ascii", "replace"))}
 

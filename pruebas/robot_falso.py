@@ -65,8 +65,7 @@ class RobotFalso:
 
     def enviar_error(self, texto):
         """Manda un mensaje de error (tipo 20, subtipo 6) a los clientes."""
-        import struct
-        self._difundir(ayudas.mensaje_robot(6, struct.pack(">5i", 99, 0, 2, 0, 0) + texto.encode("utf-8")))
+        self._difundir(ayudas.mensaje_error(99, texto.encode("utf-8")))
 
     # ---------- hilos ----------
     def _aceptar(self):

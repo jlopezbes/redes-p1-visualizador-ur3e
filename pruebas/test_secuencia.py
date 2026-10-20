@@ -11,7 +11,6 @@ import json
 import math
 import os
 import re
-import struct
 import tempfile
 import unittest
 from unittest import mock
@@ -72,7 +71,7 @@ class Base(unittest.TestCase):
             q, ejecutando=ejecutando, protegido=protegido, emergencia=emergencia, modo=modo)))
 
     def error_del_robot(self, texto):
-        self.rep.procesar(decodificar(ayudas.mensaje_robot(6, struct.pack(">5i", 99, 0, 2, 0, 0) + texto.encode())))
+        self.rep.procesar(decodificar(ayudas.mensaje_error(99, texto.encode())))
 
     def preparar(self, *puntos):
         self.seq.extend(puntos)
@@ -181,6 +180,17 @@ class PruebasFallos(Base):
         self.assertEqual(self.rep.fase, secuencia.PARADA)
         self.assertIn("Colision", self.salida.getvalue())
         self.assertEqual(self.ordenes[-1], "stopj(0.2)\n")
+
+    def test_movej_rechazado_en_modo_local_para_sin_stopj_y_lo_explica(self):
+        self.preparar(B)
+        self.rep.ejecutar()
+        self.rep.procesar(decodificar(ayudas.mensaje_error(ur.CODIGO_SIN_REMOTO)))
+        salida = self.salida.getvalue()
+        self.assertEqual(self.rep.fase, secuencia.PARADA)
+        self.assertFalse(any(o.startswith("stopj") for o in self.ordenes))     # tambien se rechazaria
+        self.assertTrue(self.rep.reconectar)
+        self.assertIn("no se ha movido", salida)
+        self.assertNotIn("Robot detenido", salida)
 
     def test_error_del_robot_sin_movimiento_solo_se_avisa(self):
         self.preparar(B)

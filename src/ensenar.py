@@ -120,6 +120,9 @@ def main():
                 print("Conectado a {}. {}".format(robot.destino, AYUDA))
                 for datos in robot.mensajes():
                     rep.procesar(datos)
+                    if rep.reconectar:          # orden rechazada: la conexion vieja puede ser de solo lectura
+                        rep.reconectar = False
+                        break
                     if rep.q:
                         simulador.mover(nombre, rep.q)
                     while not comandos.empty() and not salir:
