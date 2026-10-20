@@ -11,6 +11,7 @@ Nivel al que opto: **sobresaliente** `[JOSU: confirma]`. Python 3.7.5, solo `soc
 | `primaria.py` | Aprobado | Lee 1 o varios robots por la interfaz primaria (30001) y mueve el UR3e de PyBullet |
 | `tiempo_real.py` | Aprobado | Lo mismo por la interfaz de tiempo real (30003) |
 | `ensenar.py` | Sobresaliente | Enseñar puntos, previsualizar, ejecutar con `movej` y supervisar; desde la consola |
+| `copiar.py` | Añadido en la defensa | Graba puntos moviendo a mano un robot (solo lectura) y los ejecuta en otro; pedido por el profesor y hecho en directo (sección 3) |
 
 Las IP de los robots están solo en `datos\robots.json`: para pasar de URSim al UR3e se cambia ese fichero, no el código. `primaria.py` y `tiempo_real.py` preguntan cuántos robots visualizar; con 2 se cubre el notable. Las clases están en `src\librerias\`.
 
@@ -34,6 +35,10 @@ Cuatro capas, cada una con una sola responsabilidad: `red.py` (una conexión TCP
 - **`Lock` en `HiloLectorUR` (`cerrojo`).** El hilo lector escribe `q` y el principal lo lee, así que ambos lo hacen dentro de `with cerrojo:` (`threading.Lock`), como recomienda el enunciado. Primero estaba sin `Lock` (un solo hilo escribe y reasigna la lista entera, lo que en CPython no se ve a medias); lo añadí porque es lo que pide el enunciado y porque no depende de un detalle del intérprete. **Alternativa:** dejarlo sin `Lock`, que funcionaba. **Coste:** 5 líneas.
 - **Un script por nivel, rutas relativas y sin `argparse`.** Cada entregable se ejecuta por separado, sin argumentos, y funciona desde cualquier carpeta y PC. **Alternativa:** un `main.py` con subcomandos (lo que había).
 - **Una web de control** se probó y se **retiró** (D27): no aportaba al enunciado y no se podía defender línea a línea con el robot delante; `ensenar` se maneja por consola.
+- **Cambios surgidos en la defensa con el UR3e (2026-10-20).** `[JOSU: cuéntalo con tus palabras; los datos están en depuración F31 y decisiones D30 y D31]`
+  - **Fallo con el robot real (F31).** Con el UR3e, `e` daba el error 210 y el programa decía «Robot detenido» sin que el robot se hubiera movido. Causa: el robot decide si una conexión es de solo lectura **al abrirla**; una abierta con el pendant en Local sigue rechazando órdenes aunque luego se pase a remoto. Además, el texto del error se leía desde un byte equivocado (35 en vez de 32) y el `stopj` también rechazado producía el aviso falso. **Arreglo:** el 210 se trata como «orden rechazada» (no se manda `stopj`, se dice que no se ha movido y se reconecta; se continúa con `r`), y `red.py` hace `shutdown()` antes de `close()` para que en Linux el cierre despierte al hilo que espera en `recv()`. **Alternativa descartada:** leer el modo de control del robot, porque su decodificación no se podía verificar.
+  - **Funcionalidad nueva (D30): `copiar.py`.** El profesor pidió grabar los puntos en un robot y ejecutarlos en otro. Se reutilizó `ensenar.py`: el robot grabador solo se lee (un `HiloLectorUR`, nunca recibe órdenes) y el ejecutor lo gobierna el mismo `Reproductor`, con los mismos límites de velocidad. Funcionó a la primera con los UR3e. **Alternativa:** meter el segundo robot en `ensenar.py`; se prefirió no tocar el script ya defendido, aceptando algo de código repetido.
+  - **Lección:** la estructura por capas (`red` → `ur` → `secuencia`) permitió localizar el fallo en `ur.py`/`secuencia.py` y añadir la función nueva sin tocar el resto. `[JOSU: confirma o matiza]`
 - **No hecho, por alcance:** trayectoria suave entre puntos (`movej` con radio de empalme o `speedj`; hoy el robot se para en cada punto), RTDE y gráfico en los scripts de visualización.
 
 ## 4. Respuestas a las preguntas del enunciado
@@ -53,8 +58,10 @@ Cuatro capas, cada una con una sola responsabilidad: `red.py` (una conexión TCP
 
 ## 5. Pruebas, resultados y diferencias con el robot real
 
-223 pruebas automáticas y un humo de extremo a extremo con robots falsos que emiten las tramas con el formato real (no sustituyen a un robot). `[JOSU: resultados con URSim; robot real usado en el laboratorio y diferencias observadas con respecto a URSim (el enunciado lo pide); si el formato de 251 B y el offset 252 se confirmaron con el robot]`.
+201 pruebas automáticas (incluidas las del error 210 y las de `copiar.py`) y un humo de extremo a extremo con robots falsos que emiten las tramas con el formato real (no sustituyen a un robot). Contra URSim (2026-10-19): `primaria`, `tiempo_real` con 2 robots y `ensenar` con un movimiento pequeño; retrasos medidos en la sección 4.
+
+**Diferencia observada entre URSim y el UR3e real (la pide el enunciado):** el UR3e rechaza el `movej` con el error 210 si la conexión se abrió con el pendant en modo Local, y URSim no lo hizo en las pruebas. Es el fallo F31 de la sección 3. `[JOSU: ¿otras diferencias que viste en el laboratorio (IP, tiempos, latencia, estado del robot...)? ¿Se confirmaron el formato de 251 B y el offset 252? Si no lo sabes, dilo así]`.
 
 ## 6. Uso de la IA
 
-El régimen de la asignatura permite la IA y la promueve. `[JOSU: tu versión honesta: qué generó Claude Code (código de comunicación a partir del enunciado), qué decidiste y corregiste tú (la limpieza y sus criterios, la estructura por scripts, la retirada de la web), cómo comprobaste que entendías cada línea (lectura, cambios en caliente sin IA, depuración de fallos) y qué probaste tú con el robot]`.
+El régimen de la asignatura permite la IA y la promueve. `[JOSU: tu versión honesta: qué generó Claude Code (código de comunicación a partir del enunciado; en la defensa, el arreglo de F31 y `copiar.py` a petición del profesor, probados en el momento con los UR3e), qué decidiste y corregiste tú (la limpieza y sus criterios, la estructura por scripts, la retirada de la web), cómo comprobaste que entendías cada línea (lectura, cambios en caliente sin IA, depuración de fallos) y qué probaste tú con el robot]`.

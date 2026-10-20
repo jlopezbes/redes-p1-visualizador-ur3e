@@ -1,6 +1,6 @@
 # Arquitectura
 
-Versión final en `src/`: escrita por la IA a partir de `claude_2`, endurecida en la auditoría de robustez (2026-10-14) y **limpiada por capas** el 2026-10-15/16 (D17–D21; 1176 → 817 líneas), y el 2026-10-17 **reorganizada por niveles** (D23: un script por entregable, las clases en `src/librerias/`, sin `argparse` ni `tareas.py`) y una web de control para `ensenar` que se **retiró el 2026-10-19** (D24 sustituida por D27: nadie la defendería con el UR3e delante). Pendiente de la revisión final de Josu. Python 3.7.5, solo `socket`, `struct`, `threading` y la librería estándar, más `UR3e_rg2` (PyBullet) para dibujar.
+Versión final en `src/`: escrita por la IA a partir de `claude_2`, endurecida en la auditoría de robustez (2026-10-14) y **limpiada por capas** el 2026-10-15/16 (D17–D21; 1176 → 817 líneas), y el 2026-10-17 **reorganizada por niveles** (D23: un script por entregable, las clases en `src/librerias/`, sin `argparse` ni `tareas.py`) y una web de control para `ensenar` que se **retiró el 2026-10-19** (D24 sustituida por D27: nadie la defendería con el UR3e delante). El 2026-10-20, durante la defensa con el UR3e, se corrigió el rechazo C210 (F31) y se añadió `copiar.py` (D30). Python 3.7.5, solo `socket`, `struct`, `threading` y la librería estándar, más `UR3e_rg2` (PyBullet) para dibujar.
 
 ## Módulos
 
@@ -10,7 +10,8 @@ Versión final en `src/`: escrita por la IA a partir de `claude_2`, endurecida e
 |---|---|---|
 | `src/primaria.py` | Aprobado | Visualiza 1 o varios robots por la interfaz primaria (30001). Pregunta con `input` cuántos (Intro = 1). |
 | `src/tiempo_real.py` | Aprobado | Igual, por la interfaz de tiempo real (30003). |
-| `src/ensenar.py` | Sobresaliente | Enseñar, previsualizar, ejecutar y supervisar con el primer robot del JSON. Lleva la consola (`_leer_consola`, `_comando`), y el bucle principal. |
+| `src/ensenar.py` | Sobresaliente | Enseñar, previsualizar, ejecutar y supervisar con el primer robot del JSON. Lleva la consola (`_leer_consola`, `_comando`), y el bucle principal. Si el robot rechaza una orden (C210), sale del bucle de lectura y reconecta (F31). |
+| `src/copiar.py` | Sobresaliente (añadido en la defensa, 2026-10-20, D30) | `ensenar.py` con dos robots: `g` guarda la posición del **grabador** (2.º de `robots.json`, solo se lee) y `e` la ejecuta en el **ejecutor** (1.º, el único que se mueve). Mismos comandos y mismos ficheros de `datos/secuencias/`. Acepta `copiar.py <grabador> <ejecutor>` (nombres de `robots.json`) y es el único script con argumentos. |
 
 Los dos primeros son casi idénticos a propósito: son los dos «scripts separados» que pide el enunciado y la única diferencia es `tiempo_real=True`. El notable (varios robots en una ventana) lo cubren con la respuesta «2» a la pregunta.
 
@@ -19,7 +20,7 @@ Los dos primeros son casi idénticos a propósito: son los dos «scripts separad
 | Archivo | Qué contiene | Responsabilidad |
 |---|---|---|
 | `ur.py` | clases `ClienteUR`, `HiloLectorUR`; funciones `es_punto_valido`, `leer_robots`, `elegir_robots` | **Portal entre la red y el robot** (D18): conecta, corta los bytes en paquetes, los decodifica y entrega diccionarios ya traducidos (`mensajes()`); envía `movej`/`stopj`. Una sola clase para la interfaz primaria y la de tiempo real. `HiloLectorUR` es el hilo aparte que lee un robot y guarda solo el último `q`. `leer_robots` lee `robots.json`; `elegir_robots` pregunta cuántos visualizar. |
-| `red.py` | clases `ConexionTCP`, `ErrorRed`, `ErrorRedTimeout` | **Red pura**: conectar, desconectar, enviar y recibir por TCP con timeouts. No conoce el protocolo del UR. Valida IP y puerto y **traduce todo fallo de socket a `ErrorRed`** (D19). |
+| `red.py` | clases `ConexionTCP`, `ErrorRed`, `ErrorRedTimeout` | **Red pura**: conectar, desconectar, enviar y recibir por TCP con timeouts. No conoce el protocolo del UR. Valida IP y puerto y **traduce todo fallo de socket a `ErrorRed`** (D19). `desconectar()` hace `shutdown(SHUT_RDWR)` antes de `close()`: en Linux `close()` no despierta a un `recv()` de otro hilo (F31). |
 | `simulador.py` | clases `Simulador`, `ErrorSimulador`; función `visualizar` | Envuelve `UR3eRG2` (PyBullet): robots por nombre, colocados en fila a 1 m (D21), `mover`, `previsualizar` y `cerrar`. Convierte los fallos de la librería en `ErrorSimulador`. `visualizar(clientes)` es el bucle de `primaria.py` y `tiempo_real.py` (antes en `tareas.py`). |
 | `secuencia.py` | clases `Secuencia`, `Reproductor`, `ErrorSecuencia`; | Enseñar y reproducir: `Secuencia` es una lista de puntos que se guarda y carga en JSON; `Reproductor` es la máquina de estados que envía un `movej` por punto, vigila errores y permite `ajustar` velocidad y aceleración. No deja escapar `ErrorRed`. |
 
@@ -70,7 +71,8 @@ Una sola excepción de comunicación, `ErrorRed` (D19): `ur.py` la deja pasar ta
 | Llegan más de `MAX_IGNORADOS` (100) paquetes seguidos sin ningún dato útil | `ErrorRed` «puerto o interfaz equivocados» (p. ej. cliente primaria contra el puerto 30003) |
 | `movej` con ángulos fuera de ±2π, o velocidad o aceleración fuera de `[MINIMO, VELOCIDAD_MAX]` / `[MINIMO, ACELERACION_MAX]` | `ValueError` y **no se envía nada** |
 | `stopj` | siempre se envía; `ErrorRed` si no hay conexión |
-| Un mensaje del robot de tipo 20 con subtipo 6 o 10 | se entrega como `{"error": texto}` (`reportLevel` sin mirar) |
+| Un mensaje del robot de tipo 20 con subtipo 6 o 10 | se entrega como `{"error": "error del robot (C<código>A<argumento>): texto"}` (`reportLevel` sin mirar; el texto empieza en el byte 32, F31) |
+| El robot rechaza una orden con el código 210 (`ur.CODIGO_SIN_REMOTO`): la conexión se abrió en modo Local y sigue siendo de solo lectura aunque luego se pase a Control remoto (F31) | se entrega como `{"error": ..., "rechazada": True}`. `Reproductor._fallar(motivo, frenar=False)` **no manda `stopj`** (el robot también lo rechazaría), dice «no se ha movido», pone `reconectar = True` y deja la fase en `PARADA`; `ensenar.py` y `copiar.py` abren otra conexión y se continúa con `r` |
 
 **No hay noción de «dato fresco»** (D20): si el robot calla, `recibir` da `ErrorRedTimeout` a los `TIMEOUT_LECTURA` s, el cliente reconecta y `HiloLectorUR.q` pasa a `None`; `movej` no depende del último estado porque lleva ángulos absolutos.
 
@@ -104,6 +106,7 @@ Fases del `Reproductor`: `LIBRE`, `ENVIADO` (se envió un `movej` y aún no se v
 |---|---|---|
 | `primaria.py` / `tiempo_real.py` (`visualizar`) | un `HiloLectorUR` por robot + el hilo principal | Cada hilo guarda solo el **último `q`** en su atributo `q` (con `with cerrojo:`, D29); el hilo principal lo lee y dibuja 30 veces por segundo, sin bloquearse aunque un robot tarde en contestar. Si el robot se cae, `q` pasa a `None` y el robot simulado se queda quieto. |
 | `ensenar.py` | hilo principal + un hilo que lee la consola | La consola solo mete líneas de texto en una `queue.Queue`; el principal lee los mensajes del robot, atiende los comandos y dibuja. No usa `HiloLectorUR`: necesita todos los mensajes (errores, `isProgramRunning`). |
+| `copiar.py` | hilo principal + un `HiloLectorUR` (grabador) + un hilo que lee la consola | Como `ensenar.py`, más un `HiloLectorUR` que lee el grabador y guarda su último `q` (con `with cerrojo:`); `g` copia ese `q` a la secuencia y el principal lo dibuja. El grabador **nunca recibe una orden**: su cliente solo lee. El ejecutor lo atiende el hilo principal con el `Reproductor`. |
 
 **PyBullet se toca solo desde el hilo principal** (no es seguro entre hilos). Los hilos terminan con `detener()` y son `daemon`: no impiden salir con Ctrl+C. Al salir de `visualizar` y de `ensenar.main`, un `try/finally` frena el robot si hace falta, detiene los hilos y cierra la ventana, en ese orden.
 
