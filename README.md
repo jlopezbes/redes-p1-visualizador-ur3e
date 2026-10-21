@@ -102,6 +102,6 @@ Comparación: [docs/desde-pi/comparacion-versiones-p1.md](../../docs/desde-pi/co
 
 ## Documentación de la práctica
 
-[arquitectura](docs/arquitectura.md) · [decisiones](docs/decisiones.md) · [depuración](docs/depuración.md) · [pruebas](docs/pruebas.md) · [memoria (borrador)](docs/memoria-borrador.md) · desde la Pi: [defensa](../../docs/desde-pi/defensa-p1.md)
+[arquitectura](docs/arquitectura.md) · [decisiones](docs/decisiones.md) · [depuración](docs/depuración.md) · [pruebas](docs/pruebas.md) · [memoria (borrador)](docs/memoria-borrador.md) · [informe de desarrollo con Claude Code](docs/informe-desarrollo-claude-code.md) (evidencia de la [guía común](../../docs/guia-programar-con-ia.md)) · desde la Pi: [defensa](../../docs/desde-pi/defensa-p1.md)
 
 Protocolo del UR: [docs/ur-referencia.md](../../docs/ur-referencia.md) (raíz del repo).
