@@ -1,0 +1,3 @@
+Aqui iba ur3e_rg2-0.1.0-py3-none-any.whl, la biblioteca UR3e_rg2 (modelo del UR3e con pinza RG2 para PyBullet) que da la
+universidad para la asignatura. No se publica en este repositorio. src/librerias/simulador.py la importa al abrir el simulador;
+sin ella la practica no puede dibujar el robot, pero el resto del codigo (sockets, parseo, pruebas con robot falso) no la necesita.

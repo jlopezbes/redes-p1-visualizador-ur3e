@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+entorno/
+entorno-linux/
+*.zip
+*.log
+# Nunca claves privadas ni peticiones de certificado
+*.key
+*.csr
+*.p12
+*.pfx
+*.pem
+linux/
+datos/secuencias/*.json
+recursos/*.whl
