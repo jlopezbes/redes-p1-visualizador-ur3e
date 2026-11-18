@@ -1,7 +1,7 @@
 """
 Pruebas de src/red.py contra un servidor local (127.0.0.1, puerto libre). No necesita robot.
 
-    python -B -m unittest discover -s 2_practicas\\Practica1_visualizador_UR3e\\pruebas -v
+    python -B -m unittest discover -s pruebas -v
 """
 import os
 import socket

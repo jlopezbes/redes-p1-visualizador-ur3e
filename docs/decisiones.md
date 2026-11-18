@@ -1,12 +1,14 @@
 # Decisiones
 
+> **Documento pensado para consumo de IA.** Es parte del registro de trabajo que se mantiene para que un asistente de IA pueda retomar el proyecto entre sesiones; por eso está redactado en tercera persona («el autor» es el autor de la práctica) y con detalle de proceso. No es la memoria de la práctica.
+
 Numeración fija: D1, D2… (nunca se renumera). Cada una lleva contexto, opciones, la elegida y por qué, y la marca **«distinto»** si se aparta de lo que pide el enunciado o de lo que haría la clase: esas son la materia prima de la memoria.
 
-D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14. D6–D9 son de esa misma sesión (fase 1: código escrito por la IA, pendiente de revisión de Josu). D10–D11 son de la revisión de robustez de la capa 1 (`red.py`) D12–D13 de la capa 2 (`ur.py`) D14–D15 de la capa 3 (`secuencia.py`, `simulador.py`) y D16 de la capa 4 (`main.py`, `tareas.py`). **D23–D25 son de la reorganización por niveles y la web de control (2026-10-17)**. **D17–D21 son de la limpieza por capas (2026-10-15/16)**, que simplificó parte de lo anterior: las decisiones afectadas llevan una línea **«Hoy»** que dice qué sigue valiendo. El texto original se conserva como historia.
+D1–D5 vienen de las versiones de partida (no incluidas en la entrega, ver [NOTA_CONTENIDO_NO_INCLUIDO.md](../NOTA_CONTENIDO_NO_INCLUIDO.md)) y se aplicaron a `src/` el 2026-10-14. D6–D9 son de esa misma sesión (fase 1: código escrito por la IA, pendiente de revisión del autor). D10–D11 son de la revisión de robustez de la capa 1 (`red.py`) D12–D13 de la capa 2 (`ur.py`) D14–D15 de la capa 3 (`secuencia.py`, `simulador.py`) y D16 de la capa 4 (`main.py`, `tareas.py`). **D23–D25 son de la reorganización por niveles y la web de control (2026-10-17)**. **D17–D21 son de la limpieza por capas (2026-10-15/16)**, que simplificó parte de lo anterior: las decisiones afectadas llevan una línea **«Hoy»** que dice qué sigue valiendo. El texto original se conserva como historia.
 
 ## D1 – Un solo módulo de protocolo, reutilizado por todos los scripts
 
-- **Contexto:** el código del año pasado repetía el parser en varios archivos con pequeñas variaciones (`claude_1/docs/06`, apartado C).
+- **Contexto:** el código del año pasado repetía el parser en varios archivos con pequeñas variaciones (versión de partida Claude 1).
 - **Opciones:** (a) un parser por script; (b) un módulo importable con la lectura del robot, y las tareas de cada nivel lo usan.
 - **Elegida:** (b), en `ur.py`. **Porque** un arreglo del parser se hace una vez y vale para todos los niveles.
 - **Distinto:** no.
@@ -41,7 +43,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 
 ## D5 – Un robot falso con tramas reales para probar sin hardware
 
-- **Contexto:** URSim y el robot físico no siempre están disponibles, y el simulador de Claude 1 (`claude_1/simulador_ur.py`) no simula `isProgramRunning` ni `stopj`, así que la máquina de estados no se podía probar entera con él.
+- **Contexto:** URSim y el robot físico no siempre están disponibles, y el simulador de Claude 1 no simula `isProgramRunning` ni `stopj`, así que la máquina de estados no se podía probar entera con él.
 - **Opciones:** (a) probar solo con URSim o el robot; (b) el simulador archivado de Claude 1; (c) un robot falso propio en `pruebas/robot_falso.py`.
 - **Elegida:** (c). **Porque** simula movimiento a la velocidad pedida, `isProgramRunning` mientras se mueve, `stopj`, parada de protección y errores del robot, y solo escucha en `127.0.0.1`. **Aviso:** es nuestra interpretación del protocolo, no un robot (ver [pruebas](pruebas.md)); no se lanza en los puertos 30001–30013 con URSim abierto (VirtualBox los reenvía): se usan 31xxx.
 - **Distinto:** no.
@@ -49,34 +51,34 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 
 ## D6 – Una clase `Simulador` propia sobre la librería `UR3e_rg2`
 
-- **Contexto:** Josu pidió una clase dedicada para el simulador «si la librería no simplifica lo suficiente».
-- **Opciones:** (a) usar `UR3eRG2` directamente en cada tarea (como `claude_2`); (b) una clase fina que esconda sus detalles.
-- **Elegida:** (b), `simulador.py` (≈ 40 líneas). **Porque** la librería no esconde cuatro cosas, y en `claude_2` cada script las resolvía por su cuenta: (1) el primer robot ya existe con id 0 y los demás se crean con `spawn_robot` (en la prueba, el segundo recibió el id 2: el suelo ocupa el 1); (2) `move_robot` alarga en sitio la lista que recibe (`joint_values += ...`), así que hay que pasarle una copia; (3) colocar la base del primer robot exige llamar a `pybullet` directamente; (4) la interpolación de la previsualización estaba en el script de enseñar. Se comprobó con la librería real (`pruebas/humo_pybullet.py`).
-- **Distinto:** no (es lo que pidió Josu), pero con un matiz: `Simulador` acepta un visualizador falso en el constructor para poder probarla sin ventana.
+- **Contexto:** El autor pidió una clase dedicada para el simulador «si la librería no simplifica lo suficiente».
+- **Opciones:** (a) usar `UR3eRG2` directamente en cada tarea (como Claude 2); (b) una clase fina que esconda sus detalles.
+- **Elegida:** (b), `simulador.py` (≈ 40 líneas). **Porque** la librería no esconde cuatro cosas, y en Claude 2 cada script las resolvía por su cuenta: (1) el primer robot ya existe con id 0 y los demás se crean con `spawn_robot` (en la prueba, el segundo recibió el id 2: el suelo ocupa el 1); (2) `move_robot` alarga en sitio la lista que recibe (`joint_values += ...`), así que hay que pasarle una copia; (3) colocar la base del primer robot exige llamar a `pybullet` directamente; (4) la interpolación de la previsualización estaba en el script de enseñar. Se comprobó con la librería real (`pruebas/humo_pybullet.py`).
+- **Distinto:** no (es lo que pidió el autor), pero con un matiz: `Simulador` acepta un visualizador falso en el constructor para poder probarla sin ventana.
 - **Hoy (D21):** `agregar_robot(nombre)` ya no recibe la posición: coloca los robots en fila a 1 m. Ya no hay colocación del primer robot con `pybullet` (3.) ni `with`: se usa `try/finally` y `cerrar()` (D17).
 - **Commit:** `2f0f5f5`
 
 ## D7 – Velocidad y aceleración por defecto bajas y límites que no se pueden saltar
 
-- **Contexto:** el enunciado fija 0,3 rad/s y 0,5 rad/s² como límites en el robot real (según `claude_2`); `CLAUDE.md` pide velocidades bajas en físico (`--v 0.1 --a 0.2`) y `speedj`/`movej` rápidos son agresivos.
-- **Opciones:** (a) por defecto 0,3 / 0,5, el máximo permitido (`claude_2`); (b) por defecto 0,1 / 0,2 y rechazo de lo que pase de 0,3 / 0,5.
+- **Contexto:** el enunciado fija 0,3 rad/s y 0,5 rad/s² como límites en el robot real (según Claude 2); las reglas de trabajo piden velocidades bajas en físico (`--v 0.1 --a 0.2`) y `speedj`/`movej` rápidos son agresivos.
+- **Opciones:** (a) por defecto 0,3 / 0,5, el máximo permitido (Claude 2); (b) por defecto 0,1 / 0,2 y rechazo de lo que pase de 0,3 / 0,5.
 - **Elegida:** (b). `UrPrimaria.movej` es la que lo impone (no el script de enseñar): lanza `ValueError` y no envía nada si la velocidad, la aceleración o los ángulos están fuera de rango; y `main.py ensenar` lo rechaza al arrancar (`--v 0.5` → código de salida 2). `movej` además exige `velocidad=` y `aceleracion=` por nombre, para no mezclar el orden (el código del año pasado mezclaba `(v, a)`).
-- **Distinto:** sí, respecto a `claude_2`: más lento por defecto. Se sube con `--v` y `--a` hasta los límites.
+- **Distinto:** sí, respecto a Claude 2: más lento por defecto. Se sube con `--v` y `--a` hasta los límites.
 - **Commit:** `fe2a2de`, `800dd7d`
 
 ## D8 – Reparto en módulos: red / ur / simulador / secuencia / tareas / main
 
-- **Contexto:** Josu pidió una clase de red, otra que la use para hablar con el UR, y un script de funciones que centralice los controladores.
+- **Contexto:** El autor pidió una clase de red, otra que la use para hablar con el UR, y un script de funciones que centralice los controladores.
 - **Opciones:** (a) tres módulos tal cual; (b) añadir `secuencia.py` y una clase base `ClienteUR`.
 - **Elegida:** (b). **Porque** la máquina de estados de enseñar y reproducir (≈ 100 líneas con estado propio) no cabe como «función» sin volverse ilegible, y las dos interfaces del UR (30001 y 30003) comparten la conexión y el buffer y solo se diferencian en cómo cortan un paquete. `secuencia.py` no abre sockets ni ventanas: recibe el robot y los mensajes.
-- **Distinto:** sí, respecto al reparto que pidió Josu: dos piezas más (`ClienteUR` y `secuencia.py`). Para revisar.
+- **Distinto:** sí, respecto al reparto que pidió el autor: dos piezas más (`ClienteUR` y `secuencia.py`). Para revisar.
 - **Hoy (D18):** `ClienteUR` es una clase única para las dos interfaces (ya no hay base ni subclases `UrPrimaria`/`UrTiempoReal`) y decodifica los mensajes antes de entregarlos.
 - **Hoy (D23):** `tareas.py` y `main.py` desaparecen: cada script de `src/` (`primaria.py`, `tiempo_real.py`, `ensenar.py`) es su propio punto de entrada y los módulos están en `src/librerias/`. El reparto red / `ur` / `simulador` / `secuencia` sigue igual.
 - **Commit:** `fe2a2de`, `e89e1da`, `800dd7d`
 
 ## D9 – Un robot es «varios robots con uno»
 
-- **Contexto:** en `claude_2` `primaria.py` tenía su propio bucle y `varios_robots.py` otro distinto con hilos.
+- **Contexto:** en Claude 2 `primaria.py` tenía su propio bucle y `varios_robots.py` otro distinto con hilos.
 - **Opciones:** (a) un bucle por tarea; (b) una sola mecánica (`LectorUR` + `_dibujar`) para `primaria`, `tiempo-real` y `varios`.
 - **Elegida:** (b). **Porque** hay un solo bucle de dibujo y de reconexión que depurar. Coste: con un solo robot también se usa un hilo, y las líneas de información salen una vez por segundo (`[robot] 10 estados/s | q (grados): ...`) en lugar de en cada mensaje.
 - **Distinto:** no.
@@ -116,7 +118,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Contexto:** un robot mudo o que gotea mantenía la conexión abierta y `ultimo_q()` seguía dando un `q` viejo; `movej` se enviaba sin saber nada del robot (F11, F12).
 - **Opciones:** (a) un plazo para la lectura y otro para el movimiento; (b) una sola función `ClienteUR.estado_fresco()` («llegó un estado válido hace menos de `PLAZO_ESTADO` s», con `time.monotonic()`) que usan `ultimo_q()` y `movej`.
 - **Elegida:** (b), con `PLAZO_ESTADO = 2,0 s` (igual que `timeout_lectura`; un UR manda 125 estados/s por la interfaz primaria). `movej` lanza `ErrorUR` y no envía nada si no hay estado fresco; `stopj` **nunca** lo exige (frenar siempre se intenta) y con un valor inválido frena con `ACELERACION_MAX`. En los tests se reduce la constante en lugar de esperar. **Porque** dos relojes podrían discrepar y la regla es «ante la duda, no mover y avisar». Un `ErrorUR` (también por falta de estados) hace que el cliente se cierre y se reconecte.
-- **Distinto:** sí, respecto a `claude_2` (que enviaba `movej` sin comprobarlo): es más estricto.
+- **Distinto:** sí, respecto a Claude 2 (que enviaba `movej` sin comprobarlo): es más estricto.
 - **Hoy: SUSTITUIDA por D20.** `estado_fresco()` y `PLAZO_ESTADO` ya no existen. Se conserva que `stopj` nunca depende de nada y que `movej` se niega ante argumentos fuera de límites.
 - **Commit:** `0cac920`
 
@@ -134,7 +136,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Contexto:** al exigir `movej` un estado fresco (D12), una vista previa larga hacía fallar el siguiente `e` (F17); el `Reproductor` enviaba `movej` con el robot parado por seguridad (F16) y se tragaba los fallos del `stopj` (F15).
 - **Opciones:** (a) subir `PLAZO_ESTADO` o saltarse la comprobación tras una vista previa; (b) una fase `ESPERANDO_ESTADO` con tope (`ESPERA_ESTADO` = 3 s) que envía el primer `movej` cuando llega un estado reciente; para bloquear: (c) `protegido` y `emergencia`, o (d) también el modo del robot (`robotMode` distinto de 7).
 - **Elegidas:** (b) y (c). **Porque** (a) quitaría la seguridad de D12 justo donde hace falta; y (d) se descarta porque la decodificación de esos campos no está verificada con un robot real y no se debe inutilizar el programa por una suposición: el modo se guarda y se muestra en un mensaje, pero no bloquea. Si no se puede enviar el `stopj` se escribe una vez, en mayúsculas, que el robot puede seguir moviéndose y que hay que pararlo con el botón del pendant; `cancelar` deja siempre el `Reproductor` libre y nunca se escribe «detenido» sin haber enviado la parada. Un `ErrorUR` del `Reproductor` no sale: pasa a fallo con parada.
-- **Distinto:** sí, respecto a `claude_2` (no esperaba ni comprobaba nada).
+- **Distinto:** sí, respecto a Claude 2 (no esperaba ni comprobaba nada).
 - **Hoy (D20):** la fase `ESPERANDO_ESTADO` y `ESPERA_ESTADO` se quitaron. Siguen valiendo (c) —solo bloquean `protegido` y `emergencia`— y el aviso en mayúsculas si el `stopj` no sale (`_parar_robot` ya no devuelve un booleano: avisa de ambas cosas).
 - **Commit:** `0cff77d`
 
@@ -158,8 +160,8 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 
 ## D17 – Limpieza por capas: lo que no aporta se quita y la seguridad con el robot se queda
 
-- **Contexto:** la auditoría de robustez subió `src/` de ≈ 545 a ≈ 800 líneas (más los tests y los docs) y Josu, que tiene que explicar cada línea en la defensa, lo veía excesivo. Pidió una limpieza de arriba (programa) a abajo (sockets), una capa cada vez, que él revisa antes de seguir. Cada capa fue una rama (`limpieza/1-main` … `limpieza/5-coherencia`, ya integradas en `main`).
-- **Criterios aplicados** (los dio Josu al revisar cada capa):
+- **Contexto:** la auditoría de robustez subió `src/` de ≈ 545 a ≈ 800 líneas (más los tests y los docs) y el autor, que tiene que explicar cada línea en la defensa, lo veía excesivo. Pidió una limpieza de arriba (programa) a abajo (sockets), una capa cada vez, que él revisa antes de seguir. Cada capa fue una rama (`limpieza/1-main` … `limpieza/5-coherencia`, ya integradas en `main`).
+- **Criterios aplicados** (los dio el autor al revisar cada capa):
   1. Una función auxiliar con 2 usos o menos se **inlina** (solo se dejan, marcadas «dudosa», las que un hilo necesita o las que duplicarían un bloque largo).
   2. Una función que solo reenvía a otra cambiando argumentos sobra (`visualizar_primaria`, `visualizar_tiempo_real` y `visualizar_varios` → `visualizar`).
   3. Una clase que solo envuelve un dato sobra (`UrPrimaria`/`UrTiempoReal` → `ClienteUR`). `Secuencia` se queda como lista con `guardar` y `cargar`.
@@ -169,7 +171,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
   7. Los nombres explican lo que son (`LectorUR` → `HiloLectorUR`, `cerrar` → `desconectar`).
 - **Lo que se conserva a propósito, por seguridad con el robot físico:** los límites de velocidad y aceleración de `movej`, `es_punto_valido` (rechaza grados enviados por error), `stopj` siempre, el aviso en mayúsculas si no se pudo frenar, la parada por `protegido`/`emergencia`/error del robot, el tamaño de 251 B, el aviso de puerto equivocado (`MAX_IGNORADOS`) y el tope de la vista previa (`MAX_PREVIEW`).
 - **Resultado:** `src/` de 1176 a 817 líneas (−31 %, contando líneas en blanco y docstrings: `ur.py` 404 → 231, `secuencia.py` 275 → 185, `red.py` 115 → 90, `simulador.py` 107 → 77, `tareas.py` 194 → 167, `main.py` 81 → 67). Las pruebas pasaron de 149 a 122 (se quitaron las de lo que ya no existe y se añadieron otras).
-- **Distinto:** sí, respecto a la auditoría (D10–D16): es la poda que Josu había aplazado.
+- **Distinto:** sí, respecto a la auditoría (D10–D16): es la poda que el autor había aplazado.
 - **Commit:** `e5ef55b` (capa 1), `5cdf084` y `ea88e21` (capa 2), `8dd4132` y `4a61cb8` (capa 3), `ad37f9b` y `1cbf228` (capa 4), `493e64b` y `7c6ec6d` (coherencia y tests)
 
 ## D18 – `ClienteUR` es el portal entre la red y el robot: una clase, y lo que sube ya está decodificado
@@ -182,7 +184,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 
 ## D19 – Una sola excepción de comunicación (`ErrorRed`) y las clases de error propias se quedan
 
-- **Contexto:** `ErrorUR` era la misma clase vacía que `ErrorRed`, y `ur.py` tenía tres conversiones de una a otra. Josu preguntó para qué valían las cuatro clases de error y, tras la explicación, decidió dejarlas: ayudan a entender el tipo de error.
+- **Contexto:** `ErrorUR` era la misma clase vacía que `ErrorRed`, y `ur.py` tenía tres conversiones de una a otra. El autor preguntó para qué valían las cuatro clases de error y, tras la explicación, decidió dejarlas: ayudan a entender el tipo de error.
 - **Opciones:** (a) una clase por módulo (D10); (b) excepciones de Python (`ConnectionError`, `TimeoutError`, `RuntimeError`); (c) una sola para la comunicación (`ErrorRed`, con `ErrorRedTimeout` para el timeout) más `ErrorSecuencia` y `ErrorSimulador`.
 - **Elegida:** (c). `ur.py` lanza `ErrorRed` también para los fallos de protocolo y `main`, `tareas` y `secuencia` la importan de `red`. **Porque** una clase que solo cambia de nombre no aporta, y las demás sí dicen qué falló. Los mensajes llevan la causa probable («robot apagado o IP de otra red?», «puerto equivocado?»).
 - **Distinto:** no.
@@ -192,7 +194,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 
 - **Contexto:** D12 y D14 añadieron `estado_fresco()` (plazo de 2 s), la fase `ESPERANDO_ESTADO` y una comprobación en `movej` y `guardar_punto`. Tras limpiar `_paquetes`, casi no aportaba: si el robot calla, `recibir` da `ErrorRedTimeout` a los 2 s y `HiloLectorUR` pone `q = None`; y `movej` lleva ángulos absolutos, así que el robot parte de donde esté.
 - **Opciones:** (a) conservarlo; (b) quitarlo y exponer `q` como atributo; (c) además, descartar lo acumulado en el socket tras una vista previa (`vaciar()`, ≈ 12 líneas).
-- **Elegida:** (b). Josu descartó (c): con el robot parado un dato viejo no importa, y mientras se mueve el bucle procesa los mensajes sin bloquearse. **Límite aceptado:** un `g` justo después de `v` puede guardar una posición vieja (ver [arquitectura](arquitectura.md)). Si `ejecutar` o `reanudar` se encuentran sin conexión, `movej` falla con `ErrorRed` y el `Reproductor` entra en `PARADA` con el motivo. Un mensaje del robot mal formado ya no se salta: provoca una reconexión (≈ 2 s).
+- **Elegida:** (b). El autor descartó (c): con el robot parado un dato viejo no importa, y mientras se mueve el bucle procesa los mensajes sin bloquearse. **Límite aceptado:** un `g` justo después de `v` puede guardar una posición vieja (ver [arquitectura](arquitectura.md)). Si `ejecutar` o `reanudar` se encuentran sin conexión, `movej` falla con `ErrorRed` y el `Reproductor` entra en `PARADA` con el motivo. Un mensaje del robot mal formado ya no se salta: provoca una reconexión (≈ 2 s).
 - **Distinto:** sí, respecto a D12 y D14.
 - **Commit:** `4a61cb8`, `ad37f9b`
 
@@ -202,11 +204,11 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Opciones:** (a) dejar todo en el JSON; (b) JSON solo con `nombre` e `ip`, y `Simulador.agregar_robot(nombre)` pone el primer robot en el origen y cada siguiente 1 m más lejos en x.
 - **Elegida:** (b). Si otra función necesita las posiciones, se pasan como argumento; el JSON solo sería el intermediario si una rama paralela las necesitara. Los campos sobrantes de un JSON antiguo se ignoran. En un PC, dos robots falsos se distinguen por IP de loopback (`127.0.0.1` y `127.0.0.2`) con el mismo puerto.
 - **Distinto:** no.
-- **Commit:** `ea88e21`, `ad37f9b`, `4a56083` (el `robots.json` de Josu)
+- **Commit:** `ea88e21`, `ad37f9b`, `4a56083` (el `robots.json` del autor)
 
 ## D22 – `primaria`, `tiempo-real` y `ensenar` cogen el robot de `robots.json`; basta editar el JSON
 
-- **Contexto:** con la VM de URSim en el PC de Josu había que repetir la IP en cada comando (`--ip`), y por defecto era `127.0.0.1`. Un solo sitio donde cambiar la IP (y en la defensa, un cambio de robot = editar el JSON).
+- **Contexto:** con la VM de URSim en el PC del autor había que repetir la IP en cada comando (`--ip`), y por defecto era `127.0.0.1`. Un solo sitio donde cambiar la IP (y en la defensa, un cambio de robot = editar el JSON).
 - **Opciones:** (a) `--ip` obligatorio o por defecto en el código (antes); (b) sin argumentos, el primer robot del JSON; `--robot nombre` elige otro; `--ip` sigue como excepción y ignora el JSON; (c) además, un campo `puerto` opcional en el JSON.
 - **Elegida:** (b). Una función nueva, `tareas.ip_robot(ruta, nombre)`, y `--config` en las cuatro órdenes. `--robot` y `--ip` son excluyentes. `--puerto` sigue siendo el estándar de cada orden (30001 o 30003); (c) queda para si hiciera falta URSim 2 por NAT sin `--puerto`. El nombre del robot elegido es el que sale en las líneas de `visualizar`.
 - **Distinto:** sí, respecto a D21 (donde `--ip` y `--puerto` eran la vía para un solo robot).
@@ -215,7 +217,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 
 ## D23 – Un script por nivel, las clases en `src/librerias/`, sin `argparse` y con rutas relativas (2026-10-17)
 
-- **Contexto:** el enunciado pide para el aprobado **«dos scripts separados: `primaria.py` y `tiempo_real.py`»** y, para el notable, «un único script que visualiza varios robots»; el repo tenía un `main.py` con subcomandos y un `tareas.py` que solo existía para que lo llamase `main`. Josu no quería `argparse`, quería saber «qué ejecutar y cómo» y que la práctica funcionase al cambiar de PC.
+- **Contexto:** el enunciado pide para el aprobado **«dos scripts separados: `primaria.py` y `tiempo_real.py`»** y, para el notable, «un único script que visualiza varios robots»; el repo tenía un `main.py` con subcomandos y un `tareas.py` que solo existía para que lo llamase `main`. El autor no quería `argparse`, quería saber «qué ejecutar y cómo» y que la práctica funcionase al cambiar de PC.
 - **Opciones:** (a) dejar `main.py` + `tareas.py`; (b) `main.py` con menú de `input` y `tareas.py` dentro; (c) un script por nivel que llama a las clases, con las clases en otra carpeta.
 - **Elegida:** (c). `src/primaria.py`, `src/tiempo_real.py` y `src/ensenar.py`; `src/librerias/` con `red`, `ur`, `simulador`, `secuencia` y `hmi`. `primaria` y `tiempo_real` preguntan con `input` cuántos robots visualizar (1 a N, Intro = 1): con 2 cubren el notable. Se descartó un `varios.py`; si el profesor leyera «un único script» al pie de la letra, serían unas 5 líneas. El bucle `visualizar` pasó a `simulador.py` y `leer_robots`/`elegir_robots` a `ur.py`; la consola, `_comando` y el bucle de enseñar, a `ensenar.py`.
 - **Rutas:** cada script calcula `datos/` y `librerias/` desde `os.path.abspath(__file__)` y `..`, así que da igual desde qué carpeta se lance y en qué PC esté (sin rutas absolutas; hay una prueba que lo comprueba). Los módulos son planos (sin paquete) y el script añade `librerias/` a `sys.path`: tres líneas repetidas en cada script, a cambio de no tocar los `import` de las clases ni de las pruebas.
@@ -225,7 +227,7 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 
 ## D24 – Una web de control en `localhost` para `ensenar`, con `http.server` y sin dependencias (2026-10-17) — RETIRADA el 2026-10-19 (D27)
 
-- **Contexto:** la consola de `ensenar` obliga a recordar letras y no enseña el estado ni las alarmas; Josu quería «una especie de HMI» con el estado del robot, registrar puntos, alarmas, velocidad ajustable y el movimiento de cada articulación en un gráfico. El enunciado no lo pide (solo menciona los deslizadores de PyBullet como opción): no sube nota.
+- **Contexto:** la consola de `ensenar` obliga a recordar letras y no enseña el estado ni las alarmas; el autor quería «una especie de HMI» con el estado del robot, registrar puntos, alarmas, velocidad ajustable y el movimiento de cada articulación en un gráfico. El enunciado no lo pide (solo menciona los deslizadores de PyBullet como opción): no sube nota.
 - **Opciones:** (a) ventana con `pygame` o `tkinter`; (b) web servida por el propio programa; (c) Flask u otro framework.
 - **Elegida:** (b), con `http.server.ThreadingHTTPServer` (Python 3.7) en un hilo, una página con CSS y JavaScript sin librerías y el gráfico en `canvas`. **Porque** (a) necesita instalar `pygame` (el PC no deja: F1, F2) o, con `tkinter`, ocupar el hilo principal, que ya es de PyBullet; (c) también exige instalar. La web no cambia la lógica: sus órdenes entran en la misma cola que la consola, y el hilo principal sigue siendo el único que toca robot, simulador y puntos. La consola se conserva como respaldo.
 - **Seguridad:** la web puede mandar `movej`. Solo escucha en `127.0.0.1`, exige un token aleatorio, rechaza una cabecera `Host` ajena y un `POST` que no sea JSON, y limita las órdenes (ver [arquitectura](arquitectura.md), «HMI web»). «Ejecutar» pide confirmación. La seta del pendant sigue siendo la parada real.
@@ -246,19 +248,19 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Contexto:** se ha sabido que la práctica debe poder ejecutarse en cualquier ordenador, sin pelearse con dependencias: solo ejecutar y cambiar las IP de los robots.
 - **Opciones:** (a) `requirements.txt` + `venv` que crea el `.bat`; (b) ruedas (`.whl`) en la carpeta e instalación sin internet; (c) un Python embebido (`python-3.7.5-embed-amd64.zip`) con las librerías ya copiadas dentro, y un `.bat` que lo usa.
 - **Elegida:** (c). (a) y (b) obligan a que el PC tenga Python 3.7 y a instalar, y **`pybullet` no tiene rueda para Python 3.7 en Windows** (F1): en un PC sin compilador no se instala. (c) no instala nada: la carpeta `entorno\` lleva el `pybullet.pyd` compilado aquí (5,9 MB), `numpy`, `scipy`, `pybullet_planning` y `UR3e_rg2` (la versión parcheada de `docs/entorno.md`). Con `python37._pth` el intérprete ignora el Python y el perfil del PC (comprobado: el humo de extremo a extremo y las 223 pruebas pasan con él).
-- **Cómo:** `herramientas/crear_entorno.ps1` lo genera (descarga 7,5 MB y copia lo instalado en este PC) y **no se versiona** (≈ 170 MB, `.gitignore`); `iniciar.bat` (en la carpeta de la práctica, con CRLF por `.gitattributes`) ofrece un menú (primaria, tiempo real, enseñar, editar IP, salir) o recibe el nombre del script, y pide confirmación antes de `ensenar` (envía `movej`). Si falta `entorno\`, usa el `python` del PC con un aviso. Se entrega comprimiendo la carpeta de la práctica con `entorno\`.
+- **Cómo:** un script de PowerShell lo generaba (descarga 7,5 MB y copia lo instalado en este PC); **no se incluye en la entrega** (≈ 170 MB, ver [NOTA_CONTENIDO_NO_INCLUIDO.md](../NOTA_CONTENIDO_NO_INCLUIDO.md)); `iniciar.bat` (en la carpeta de la práctica, con CRLF por `.gitattributes`) ofrece un menú (primaria, tiempo real, enseñar, editar IP, salir) o recibe el nombre del script, y pide confirmación antes de `ensenar` (envía `movej`). Si falta `entorno\`, usa el `python` del PC con un aviso.
 - **Se pierde / riesgo:** pesa mucho; solo Windows de 64 bits; las librerías son las de este PC (si cambian, se vuelve a ejecutar el script). Un PC realmente limpio no se ha probado: por eso se copian los runtimes de Visual C++ de `System32`.
 - **Distinto:** sí, el enunciado no pide nada de esto; es un requisito nuevo del profesor, de segunda mano.
 - **Commit:** pendiente.
 
 ## D27 – Se retira la web de control: `ensenar` vuelve a ser solo de consola (2026-10-19)
 
-- **Contexto:** Josu probó `iniciar.bat` (2026-10-19). En la web no entendía para qué servía «previsualizar» y no veía que hiciera nada; para la defensa prefiere guardar puntos por consola y poder explicar cada línea. La web además era un extra fuera del enunciado (D24).
+- **Contexto:** El autor probó `iniciar.bat` (2026-10-19). En la web no entendía para qué servía «previsualizar» y no veía que hiciera nada; para la defensa prefiere guardar puntos por consola y poder explicar cada línea. La web además era un extra fuera del enunciado (D24).
 - **Opciones:** (a) dejar la web y explicarla; (b) quitarla entera; (c) dejarla sin la previsualización.
 - **Elegida:** (b). Se borran `hmi.py`, `hmi.html`, `test_hmi.py`, `ensenar._estado`, el arranque del servidor y del navegador, y la cola de avisos con hora (`secuencia.avisar` y `mensajes`: solo existían para la web; `avisar` pasa a ser `print`, como antes de D25). Se **conservan** la consola, `ajustar` (cambios de velocidad en caliente) y todo el blindaje de `ensenar`. 223 pruebas pasan a 181.
 - **Mejora de paso:** `v` ahora escribe «Previsualizando N puntos en la ventana (el robot real no se mueve)...» y «Previsualizacion terminada», porque desde la consola tampoco se notaba qué hacía. **Qué hace `v`:** mueve el robot **simulado** de la ventana, por interpolación lineal, desde su pose actual por cada punto guardado (≤ 20 s), sin enviar nada al robot real; luego el simulador vuelve a seguir al robot real. Es el «previsualizar» que pide el enunciado.
 - **Se pierde:** el gráfico de las 6 articulaciones, el panel de alarmas y los botones. Las alarmas siguen saliendo por consola («ERROR del robot», «*** FALLO DE LA SECUENCIA»). F25–F27 pasan a historia (el código que describen ya no existe).
-- **El robot 2 inmóvil (resuelto, F29):** Josu vio el segundo robot de la ventana en la pose por defecto (brazo estirado, q = 0) con `tiempo_real` y dos URSim: no era la web ni URSim, sino una carrera al conectar dos hilos a la vez con el Python portable.
+- **El robot 2 inmóvil (resuelto, F29):** El autor vio el segundo robot de la ventana en la pose por defecto (brazo estirado, q = 0) con `tiempo_real` y dos URSim: no era la web ni URSim, sino una carrera al conectar dos hilos a la vez con el Python portable.
 - **Distinto:** sí, respecto a D24 (la sustituye).
 - **Commit:** pendiente.
 
@@ -266,14 +268,14 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 
 - **Contexto:** se ha sabido que la práctica debe ejecutarse en Windows y en Linux.
 - **Opciones:** (a) un entorno embebido también en Linux; (b) `iniciar.sh` que crea un `venv` con el `python3` del sistema; (c) `iniciar.sh` que usa `uv` para crear el entorno con un Python 3.11 propio; (d) exigir que el usuario instale las dependencias a mano.
-- **Elegida:** (c), y después se llevó el kit dentro de la carpeta (carpeta `linux/`, no versionada, generada en Windows con `herramientas/preparar_linux.ps1`: el binario de `uv`, un Python 3.11 independiente y las ruedas de `requirements-linux.txt`) para que **funcione desde el pendrive sin internet ni `sudo`**; sin `linux/` usa el `uv` del sistema y descarga todo. Motivo de (c): tras fallar (b) en el primer PC con Ubuntu (2026-10-19): la versión de Ubuntu traía **Python 3.14**, y `pybullet` solo publica binarios para Linux hasta **Python 3.11** (con 3.12 o más hay que compilarlo, y no había `gcc`; `numpy<2` también intentó compilarse, F30). `uv` crea el entorno con un Python 3.11 propio; no importa qué Python traiga el sistema. Se instala **sin dependencias** (`--no-deps`): `pybullet_planning` arrastra `recordclass`, `rich`, `meshio`…, que `UR3e_rg2` no usa (el Python portable de Windows tampoco los lleva) y `recordclass` no tiene binario para Linux. La rueda de `UR3e_rg2` (Python ≥ 3.9) se copia a `recursos/` para que la carpeta sea autónoma. Mismo menú y argumentos que `iniciar.bat`; se lanza con `bash iniciar.sh` desde una terminal. El entorno es `entorno-linux/` (así no choca con el `entorno\` de Windows si la carpeta viaja con los dos).
-- **Se pierde / riesgo:** pesa ≈ 240 MB más (`linux/`); solo Linux x86_64 con glibc; la primera vez extrae y monta el entorno (unos segundos). Comprobado en Windows: las ruedas descargadas bastan para resolver `requirements-linux.txt` sin internet (`uv --dry-run`). El script se ejecutó en un Ubuntu de Josu y funcionó (2026-10-19, T24; no consta qué se probó dentro). Antes de eso no se había ejecutado en Linux (no hay Linux ni WSL aquí); la causa del fallo anterior sí se vio en un Ubuntu real (log de Josu). El código Python no tiene nada específico de Windows (sin `msvcrt`, `os.name` ni rutas fijas) y la Pi ejecutó las pruebas de la versión anterior en Linux (T14), pero no `iniciar.sh`, ni la instalación de `pybullet_planning` con la `scipy` de allí (se fija `scipy<1.13` y `numpy<2` por prudencia).
+- **Elegida:** (c), y después se llevó el kit dentro de la carpeta (carpeta `linux/`, no incluida en la entrega, ver [NOTA_CONTENIDO_NO_INCLUIDO.md](../NOTA_CONTENIDO_NO_INCLUIDO.md): el binario de `uv`, un Python 3.11 independiente y las ruedas de `requirements-linux.txt`) para que **funcione desde el pendrive sin internet ni `sudo`**; sin `linux/` usa el `uv` del sistema y descarga todo. Motivo de (c): tras fallar (b) en el primer PC con Ubuntu (2026-10-19): la versión de Ubuntu traía **Python 3.14**, y `pybullet` solo publica binarios para Linux hasta **Python 3.11** (con 3.12 o más hay que compilarlo, y no había `gcc`; `numpy<2` también intentó compilarse, F30). `uv` crea el entorno con un Python 3.11 propio; no importa qué Python traiga el sistema. Se instala **sin dependencias** (`--no-deps`): `pybullet_planning` arrastra `recordclass`, `rich`, `meshio`…, que `UR3e_rg2` no usa (el Python portable de Windows tampoco los lleva) y `recordclass` no tiene binario para Linux. La rueda de `UR3e_rg2` (Python ≥ 3.9) se copia a `recursos/` para que la carpeta sea autónoma. Mismo menú y argumentos que `iniciar.bat`; se lanza con `bash iniciar.sh` desde una terminal. El entorno es `entorno-linux/` (así no choca con el `entorno\` de Windows si la carpeta viaja con los dos).
+- **Se pierde / riesgo:** pesa ≈ 240 MB más (`linux/`); solo Linux x86_64 con glibc; la primera vez extrae y monta el entorno (unos segundos). Comprobado en Windows: las ruedas descargadas bastan para resolver `requirements-linux.txt` sin internet (`uv --dry-run`). El script se ejecutó en un Ubuntu del autor y funcionó (2026-10-19, T24; no consta qué se probó dentro). Antes de eso no se había ejecutado en Linux (no hay Linux ni WSL aquí); la causa del fallo anterior sí se vio en un Ubuntu real (log del autor). El código Python no tiene nada específico de Windows (sin `msvcrt`, `os.name` ni rutas fijas) y las pruebas de la versión anterior se ejecutaron en Linux (T14), pero no `iniciar.sh`, ni la instalación de `pybullet_planning` con la `scipy` de allí (se fija `scipy<1.13` y `numpy<2` por prudencia).
 - **Distinto:** sí, el enunciado no lo pide; es un requisito nuevo del profesor, de segunda mano.
 - **Commit:** pendiente.
 
 ## D29 – `HiloLectorUR` vuelve a tener `Lock` (`cerrojo`) sobre `q` (2026-10-19)
 
-- **Contexto:** D17 quitó el `Lock` porque un solo hilo escribe `q` y lo hace reasignando la lista entera. El enunciado recomienda proteger el dato compartido entre el hilo lector y el principal, y la memoria tenía una pregunta abierta sobre ello (pregunta 8, «sin `Lock`»). Josu decidió añadirlo.
+- **Contexto:** D17 quitó el `Lock` porque un solo hilo escribe `q` y lo hace reasignando la lista entera. El enunciado recomienda proteger el dato compartido entre el hilo lector y el principal, y la memoria tenía una pregunta abierta sobre ello (pregunta 8, «sin `Lock`»). El autor decidió añadirlo.
 - **Opciones:** (a) dejarlo sin `Lock` (funcionaba: en CPython asignar una referencia es atómico); (b) un `Lock` por hilo lector que se toma en la escritura y en la lectura de `q`; (c) además una función `ultimo_q()` que haga el `with` por dentro.
 - **Elegida:** (b), con tres cambios mínimos. `ur.py`, `HiloLectorUR.__init__`: `self.cerrojo = threading.Lock()`. `ur.py`, `run()`: `with self.cerrojo:` envuelve las dos asignaciones de `q` (`self.q = datos["q"]` y `self.q = None` al desconectar). `simulador.py`, `visualizar()`: las dos lecturas `q = lector.q` pasan a `with lector.cerrojo: q = lector.q`. **Porque** así la corrección no depende de un detalle del intérprete y cumple lo que recomienda el enunciado; (c) se descartó para no volver a un método (criterio 6 de D17).
 - **Qué NO protege:** `ultimo_error` y `recibidos` se siguen leyendo sin cerrojo (se muestran, no se usan para decidir nada). La comprobación `if self.q is None:` de `run()` tampoco lo toma: la hace el mismo hilo que escribe `q`, no hay carrera. Dentro del `with` solo hay una asignación o copiar la referencia, de modo que el hilo lector nunca espera de verdad al principal ni al revés.
@@ -287,14 +289,14 @@ D1–D5 vienen de las versiones de partida y se aplicaron a `src/` el 2026-10-14
 - **Opciones** (reconstruidas al documentar: en directo se hizo (b) sin comparar; (a) y (c) son las alternativas razonables): (a) añadir un segundo robot a `ensenar.py` con un argumento; (b) un script nuevo `copiar.py` que reutiliza todo lo de `ensenar.py`; (c) dos procesos que se pasan un fichero de puntos.
 - **Elegida:** (b). El **grabador** (2.º robot de `robots.json`) solo se lee: lo lee un `HiloLectorUR` y `g` guarda su último `q` (lectura con `with lector.cerrojo:`, como en D29); su cliente **nunca envía una orden**, así que llevarlo a mano es seguro. El **ejecutor** (1.º, el mismo que mueve `ensenar.py`) lo gobierna el mismo `Reproductor` de siempre (`e`, `c`, `r`, `ajustar`, límites 0,3 rad/s y 0,5 rad/s², `stopj`, supervisión). Mismos comandos y mismos ficheros de `datos/secuencias/`. `copiar.py <grabador> <ejecutor>` elige por nombre de `robots.json` y se niega si son el mismo robot (mismo nombre o misma IP). Se añadió como opción 6 de `iniciar.bat`/`iniciar.sh`, con la misma confirmación S/N que `ensenar`, porque envía `movej`. **Porque** (a) obligaba a tocar el script ya defendido y (c) añadía un fichero intermedio sin ventaja; (b) son 187 líneas (`ensenar.py` tiene 136) y la mayor parte es de `ensenar.py` (la estructura de hilos y la cola de la consola son las mismas).
 - **Se pierde / riesgo:** `copiar.py` repite parte de `ensenar.py` (`_leer_consola`, `_ruta`, `_comando`): se aceptó la duplicación para no tocar lo ya defendido (criterio de D17 contra las abstracciones «por si acaso»). Es el único script con argumentos (D23 los había quitado). Conectar el ejecutor en modo Local da el rechazo C210 (D31, F31). Solo funciona en el grabador si el robot manda `q` por la primaria; al guardar un punto se valida con `es_punto_valido`.
-- **Verificado:** el profesor lo pidió, se hizo con Claude en directo, se probó con los UR3e del laboratorio y **funcionó a la primera** (dato de Josu, 2026-10-20; sin log guardado). 17 pruebas automáticas con dos robots falsos (`pruebas/test_copiar.py`), traídas del PC donde se hizo; con ellas la suite pasa entera: 201 OK (T31).
+- **Verificado:** el profesor lo pidió, se hizo con Claude en directo, se probó con los UR3e del laboratorio y **funcionó a la primera** (dato del autor, 2026-10-20; sin log guardado). 17 pruebas automáticas con dos robots falsos (`pruebas/test_copiar.py`), traídas del PC donde se hizo; con ellas la suite pasa entera: 201 OK (T31).
 - **Distinto:** sí, el enunciado no lo pide; es una petición del profesor.
 - **Commit:** pendiente.
 
 ## D31 – Si el robot rechaza una orden (C210): no mandar `stopj`, decirlo y reconectar (2026-10-20)
 
 - **Contexto:** F31. Con el UR3e real, el `movej` de `ensenar.py` daba «error del robot (codigo 210)» sin texto, luego otro 210 por el `stopj` y un «Robot detenido» falso. El robot decide si una conexión TCP es de solo lectura **cuando se abre**: una conexión abierta con el pendant en Local sigue rechazando órdenes aunque después se pase a Control remoto.
-- **Opciones:** (a) leer el modo de control del robot y no dejar ejecutar en Local; (b) tratar el 210 como «orden rechazada»: no mandar `stopj`, explicarlo y abrir una conexión nueva; (c) decirle a Josu que arranque siempre con el robot en remoto.
+- **Opciones:** (a) leer el modo de control del robot y no dejar ejecutar en Local; (b) tratar el 210 como «orden rechazada»: no mandar `stopj`, explicarlo y abrir una conexión nueva; (c) decirle al autor que arranque siempre con el robot en remoto.
 - **Elegida:** (b). `ur.CODIGO_SIN_REMOTO = 210`; `_leer_error` devuelve `{"error": ..., "rechazada": True}` para ese código y para los demás `error del robot (C<código>A<argumento>): <texto>` (el texto empieza en el byte 32, no en el 35). `Reproductor._fallar(motivo, frenar=...)` no manda `stopj` si la orden fue rechazada, dice «no se ha movido» y pone `reconectar = True`; `ensenar.py` y `copiar.py` salen del bucle de lectura y reconectan; la secuencia se conserva y la fase queda en `PARADA` (se sigue con `r`). **Porque** (a) exige decodificar un campo que no se puede verificar sin el robot (descartado) y (c) deja el fallo sin explicar; (b) arregla también el falso «Robot detenido».
 - **Además, en `red.py`:** `desconectar()` hace `shutdown(SHUT_RDWR)` antes de `close()`: en Linux `close()` no despierta a un `recv()` bloqueado en otro hilo (fallaban dos pruebas, `test_desconectar_desde_otro_hilo_...` y `test_detener_cierra_el_socket_...`, y `q` tardaba 2 s; ver F31).
 - **Se pierde / riesgo:** el primer `e` tras pasar a Control remoto con la conexión vieja **sigue fallando una vez** (hay que pulsar `r`); evitarlo exigiría reconectar antes de la primera ejecución, y está pendiente. El nombre de la constante y su comentario pueden limpiarse.

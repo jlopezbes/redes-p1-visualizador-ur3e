@@ -2,7 +2,7 @@
 Pruebas de src/ensenar.py: _ruta, los comandos de la consola (_comando, ajustar) y main() entero contra el robot falso
 de las pruebas (127.0.0.1) con un simulador falso (no abre ventana).
 
-    python -B -m unittest discover -s 2_practicas\\Practica1_visualizador_UR3e\\pruebas -p test_ensenar.py -v
+    python -B -m unittest discover -s pruebas -p test_ensenar.py -v
 
 Los ficheros de secuencias y el robots.json van a carpetas temporales y el puerto del robot es uno libre: no se toca datos\\.
 """

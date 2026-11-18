@@ -2,7 +2,7 @@
 Pruebas de src/copiar.py: eleccion de grabador y ejecutor, 'g' con el q del grabador y main() entero contra DOS robots
 falsos de las pruebas (127.0.0.1 = ejecutor, 127.0.0.2 = grabador, mismo puerto) con un simulador falso (no abre ventana).
 
-    python -B -m unittest discover -s 2_practicas\\Practica1_visualizador_UR3e\\pruebas -p test_copiar.py -v
+    python -B -m unittest discover -s pruebas -p test_copiar.py -v
 
 Los ficheros de secuencias y el robots.json van a carpetas temporales y el puerto es uno libre: no se toca datos\\.
 """

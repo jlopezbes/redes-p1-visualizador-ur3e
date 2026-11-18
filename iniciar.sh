@@ -6,7 +6,7 @@
 # La primera vez crea el entorno (entorno-linux/) con la carpeta linux/ de esta practica (uv, un Python 3.11 y las
 # librerias ya descargadas): no hace falta internet, ni sudo, ni compilador, ni que el Python del sistema sea el
 # adecuado (pybullet solo tiene binarios para Linux hasta Python 3.11 y Ubuntu nuevo trae 3.14). Las siguientes
-# veces no instala nada. linux/ se genera en Windows con herramientas/preparar_linux.ps1.
+# veces no instala nada.
 # Sin linux/ (p. ej. un clon del repo), usa uv del sistema y descarga todo de internet.
 cd "$(dirname "$0")" || exit 1
 
@@ -29,7 +29,7 @@ if [ ! -x "$PY" ]; then
             && uv pip install --python "$PY" --no-deps -r requirements-linux.txt \
             || { echo "No se pudo crear el entorno (mira el error de arriba)."; rm -rf entorno-linux; exit 1; }
     else
-        echo "Falta la carpeta linux/ (el kit para Linux, se genera en Windows con herramientas/preparar_linux.ps1)"
+        echo "Falta la carpeta linux/ (el kit con uv, Python 3.11 y las ruedas, no incluido en esta entrega)"
         echo "y tampoco hay 'uv' instalado. Instala uv con:  curl -LsSf https://astral.sh/uv/install.sh | sh"
         exit 1
     fi

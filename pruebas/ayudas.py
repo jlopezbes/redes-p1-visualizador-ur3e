@@ -1,6 +1,6 @@
 """
 Ayudas comunes de las pruebas: rutas a src/ y src/librerias/, constructores de tramas del UR y un servidor local.
-Las tramas se construyen aqui con struct a partir del formato descrito en src/librerias/ur.py y docs/ur-referencia.md:
+Las tramas se construyen aqui con struct a partir del formato descrito en src/librerias/ur.py:
 si el formato fuera otro en un robot real, estas pruebas no lo detectarian (ver docs/pruebas.md).
 """
 import os

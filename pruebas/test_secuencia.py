@@ -3,7 +3,7 @@ Pruebas de src/secuencia.py: la maquina de estados del Reproductor con un robot 
 y mensajes del robot construidos con struct (pruebas/ayudas.py) y decodificados por el ClienteUR real.
 Reloj controlado: no espera segundos reales.
 
-    python -B -m unittest discover -s 2_practicas\\Practica1_visualizador_UR3e\\pruebas -v
+    python -B -m unittest discover -s pruebas -v
 """
 import contextlib
 import io

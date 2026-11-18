@@ -1,6 +1,6 @@
 @echo off
-rem Practica 1 (visualizador UR3e): arranca los scripts con el Python portatil de la carpeta entorno\.
-rem No hay que instalar nada. Las IP de los robots estan en datos\robots.json (opcion 4 del menu).
+rem Practica 1 (visualizador UR3e): arranca los scripts con el Python de la carpeta entorno\ si existe o, si no, con el del PC.
+rem Las IP de los robots estan en datos\robots.json (opcion 4 del menu).
 rem Tambien se puede lanzar directo, sin menu:  iniciar.bat primaria | tiempo_real | ensenar | copiar [grabador ejecutor]
 setlocal
 cd /d "%~dp0"
@@ -10,7 +10,6 @@ set "PY=entorno\python.exe"
 if not exist "%PY%" (
     set "PY=python"
     echo [AVISO] No existe entorno\python.exe: se usa el Python instalado en este PC ^(necesita 3.7, pybullet y UR3e_rg2^).
-    echo         El entorno portatil se crea con: herramientas\crear_entorno.ps1
     echo.
 )
 

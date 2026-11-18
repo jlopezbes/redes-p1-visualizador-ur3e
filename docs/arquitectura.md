@@ -1,6 +1,8 @@
 # Arquitectura
 
-Versión final en `src/`: escrita por la IA a partir de `claude_2`, endurecida en la auditoría de robustez (2026-10-14) y **limpiada por capas** el 2026-10-15/16 (D17–D21; 1176 → 817 líneas), y el 2026-10-17 **reorganizada por niveles** (D23: un script por entregable, las clases en `src/librerias/`, sin `argparse` ni `tareas.py`) y una web de control para `ensenar` que se **retiró el 2026-10-19** (D24 sustituida por D27: nadie la defendería con el UR3e delante). El 2026-10-20, durante la defensa con el UR3e, se corrigió el rechazo C210 (F31) y se añadió `copiar.py` (D30). Python 3.7.5, solo `socket`, `struct`, `threading` y la librería estándar, más `UR3e_rg2` (PyBullet) para dibujar.
+> **Documento pensado para consumo de IA.** Es parte del registro de trabajo que se mantiene para que un asistente de IA pueda retomar el proyecto entre sesiones; por eso está redactado en tercera persona («el autor» es el autor de la práctica) y con detalle de proceso. No es la memoria de la práctica.
+
+Versión final en `src/`: escrita por la IA a partir de la versión de partida Claude 2 (no incluida en la entrega, ver [NOTA_CONTENIDO_NO_INCLUIDO.md](../NOTA_CONTENIDO_NO_INCLUIDO.md)), endurecida en la auditoría de robustez (2026-10-14) y **limpiada por capas** el 2026-10-15/16 (D17–D21; 1176 → 817 líneas), y el 2026-10-17 **reorganizada por niveles** (D23: un script por entregable, las clases en `src/librerias/`, sin `argparse` ni `tareas.py`) y una web de control para `ensenar` que se **retiró el 2026-10-19** (D24 sustituida por D27: nadie la defendería con el UR3e delante). El 2026-10-20, durante la defensa con el UR3e, se corrigió el rechazo C210 (F31) y se añadió `copiar.py` (D30). Python 3.7.5, solo `socket`, `struct`, `threading` y la librería estándar, más `UR3e_rg2` (PyBullet) para dibujar.
 
 ## Módulos
 
@@ -133,12 +135,12 @@ Fases del `Reproductor`: `LIBRE`, `ENVIADO` (se envió un `movej` y aún no se v
 
 **Registro de órdenes en fichero.** Anotar con hora cada `movej` y `stopj` enviados en `datos/registro.txt` (unas 3 líneas en `Reproductor`). El enunciado no lo pide; no se ha añadido.
 
-**Trayectoria suave entre puntos.** Hoy el robot se para en cada punto: `movej(q, a, v)` planifica un perfil trapezoidal que acaba con velocidad cero, y el `Reproductor` no envía el siguiente hasta que `isProgramRunning` baja. Fuente: el manual de URScript (`fuentes/manuales/scriptmanualG5_.pdf`, entrada de `movej`; no contrastado en el PDF).
+**Trayectoria suave entre puntos.** Hoy el robot se para en cada punto: `movej(q, a, v)` planifica un perfil trapezoidal que acaba con velocidad cero, y el `Reproductor` no envía el siguiente hasta que `isProgramRunning` baja. Fuente: el manual de URScript (`scriptmanualG5_.pdf`, entrada de `movej`; no contrastado en el PDF).
 
 | Opción | Cómo | Coste |
 |---|---|---|
 | Blend | `movej(q, a, v, 0, r)` con `r > 0` (en **metros**, aunque el movimiento sea articular): el robot redondea la esquina sin parar. Solo funciona entre movimientos del **mismo programa**: habría que enviar un bloque `def prog(): movej(...) movej(...) end`. | El robot ya no pasa exactamente por el punto, así que `TOLERANCIA` y el seguimiento punto a punto del `Reproductor` dejan de valer; hay que repensar la supervisión. Radios que se solapan dan error. |
-| Interpolador propio | Calcular en Python la velocidad de cada articulación a partir del punto siguiente y enviar `speedj` a ritmo fijo (lo hizo `claude_1`, ejercicio 4: 0,04 rad de retraso frente a 0,6–0,8 rad con `movej` cortos). | Pasa a ser nuestro el límite de aceleración y la parada de emergencia. `speedj` con ganancia alta es agresivo en el robot físico. |
+| Interpolador propio | Calcular en Python la velocidad de cada articulación a partir del punto siguiente y enviar `speedj` a ritmo fijo (lo hizo la versión de partida Claude 1, ejercicio 4: 0,04 rad de retraso frente a 0,6–0,8 rad con `movej` cortos). | Pasa a ser nuestro el límite de aceleración y la parada de emergencia. `speedj` con ganancia alta es agresivo en el robot físico. |
 | `servoj` / RTDE | Streaming de posiciones a 125–500 Hz. | Sale del alcance de «sockets en crudo»; solo como alternativa declarada. |
 
 Primero se probaría en URSim, nunca en el UR3e directamente.
@@ -147,10 +149,10 @@ Primero se probaría en URSim, nunca en el UR3e directamente.
 
 - Cualquier mensaje tipo 20 con subtipo 6 o 10 (error o excepción de programa) detiene la secuencia, **sin mirar `reportLevel`**: es lo más seguro, pero un aviso informativo del robot también pararía un movimiento. No se ha podido comprobar qué niveles emite un UR3e.
 - El formato de 251 B del subpaquete de articulaciones y el offset 252 del tiempo real **no están verificados con un robot real**; si un robot manda otro tamaño, `ur.py` lanza `ErrorRed` en lugar de adivinar.
-- **Datos viejos tras una vista previa (D20, aceptado por Josu):** `Simulador.previsualizar` bloquea el hilo principal hasta `MAX_PREVIEW` s; mientras tanto los mensajes del robot se acumulan en el socket y, al terminar, se procesan de golpe. Un `g` pulsado justo después de `v` podría guardar una posición vieja. Con el robot en movimiento no ocurre: `previsualizar` solo se acepta con el `Reproductor` en `LIBRE`.
+- **Datos viejos tras una vista previa (D20, aceptado por el autor):** `Simulador.previsualizar` bloquea el hilo principal hasta `MAX_PREVIEW` s; mientras tanto los mensajes del robot se acumulan en el socket y, al terminar, se procesan de golpe. Un `g` pulsado justo después de `v` podría guardar una posición vieja. Con el robot en movimiento no ocurre: `previsualizar` solo se acepta con el `Reproductor` en `LIBRE`.
 - Un mensaje del robot mal formado ya no se descarta (como en la auditoría): `ensenar` lo trata como conexión perdida y reconecta (≈ 2 s); con un movimiento en curso, `stopj` y `PARADA`, igual que antes.
 - `Reproductor` en `MOVIENDO` no tiene vigilante de tiempo: si `isProgramRunning` no baja nunca (programa pausado en el pendant), espera hasta que el usuario cancele con `c`. No se avisa por duración (D14).
 - Una lista anidada 5000 niveles en un fichero de secuencia ya no se captura (`RecursionError`): se quitó como validación absurda (D17).
 - El modo del robot (`robotMode`) no bloquea ningún movimiento porque su decodificación no está verificada con un robot real.
 - `UR3eRG2` abre siempre la ventana (`gui=True` fijo): no se puede ejecutar sin pantalla.
-- Los formatos de tipo 20 (subtipos 6 y 10), los 251 B del subpaquete 1 y el offset 252 del tiempo real salen del enunciado a través de `claude_2` y **no están verificados** con un robot (ver [pruebas](pruebas.md)).
+- Los formatos de tipo 20 (subtipos 6 y 10), los 251 B del subpaquete 1 y el offset 252 del tiempo real salen del enunciado a través de la versión de partida Claude 2 y **no están verificados** con un robot (ver [pruebas](pruebas.md)).

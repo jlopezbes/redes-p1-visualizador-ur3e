@@ -3,8 +3,8 @@ UR falso para probar sin URSim ni robot: emite tramas con el formato real (las d
 movej(...) y stopj(...) y simula el movimiento. Solo escucha en loopback (127.0.0.1 por defecto). Ver el aviso de pruebas.md:
 es nuestra interpretacion del protocolo, no un robot.
 
-    python -u 2_practicas\\Practica1_visualizador_UR3e\\pruebas\\robot_falso.py 31001                (primaria)
-    python -u 2_practicas\\Practica1_visualizador_UR3e\\pruebas\\robot_falso.py 31003 tiempo_real
+    python -u pruebas\\robot_falso.py 31001                (primaria)
+    python -u pruebas\\robot_falso.py 31003 tiempo_real
 
 NO lanzarlo con URSim abierto si se usan los puertos 30001-30013 (VirtualBox los reenvia). Por defecto, usar 31001 y siguientes.
 """

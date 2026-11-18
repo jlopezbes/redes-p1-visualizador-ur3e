@@ -2,7 +2,7 @@
 Pruebas de los tres scripts de src/ (primaria.py, tiempo_real.py, ensenar.py): rutas relativas al script, main() de
 primaria y tiempo_real, y el bloque __main__ (codigos de salida y mensajes). No abren el simulador ni tocan la red.
 
-    python -B -m unittest discover -s 2_practicas\\Practica1_visualizador_UR3e\\pruebas -p test_scripts.py -v
+    python -B -m unittest discover -s pruebas -p test_scripts.py -v
 
 Los casos que ejecutan el script entero van en un SUBPROCESO sobre una copia de src/ y datos/ (el robots.json de la
 practica no se toca); los de KeyboardInterrupt y excepciones usan runpy con el simulador falso.

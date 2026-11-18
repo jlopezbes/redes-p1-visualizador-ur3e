@@ -1,8 +1,10 @@
 # Depuración
 
+> **Documento pensado para consumo de IA.** Es parte del registro de trabajo que se mantiene para que un asistente de IA pueda retomar el proyecto entre sesiones; por eso está redactado en tercera persona («el autor» es el autor de la práctica) y con detalle de proceso. No es la memoria de la práctica.
+
 El profesor valora sobre todo saber depurar: cada fallo real queda como caso. Numeración fija F1, F2… con el más reciente arriba.
 
-Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F6 es de la fase 1 de `src/`; F7–F10 son de la revisión de robustez de la capa 1 (`red.py`) y F11–F14 de la capa 2 (`ur.py`) F15–F19 de la capa 3 (`secuencia.py`, `simulador.py`) F20 de la capa 4 (`main.py`, `tareas.py`) y F21 de la ejecución real con ventana tras las cuatro capas. **F31 es del primer robot real (2026-10-20). F30 es del primer Ubuntu (2026-10-19). F27–F29 son de la primera ejecución en Windows del prototipo (2026-10-19); F25–F27 describen la web, retirada ese mismo día (D27): se conservan como lección.** **F25–F26 son de la web de control (2026-10-17).** **F22–F24 son de la limpieza por capas (2026-10-16).** Cada uno dice qué se ejecutó y qué solo se leyó.
+Los casos F1–F5 vienen de las versiones de partida (no incluidas en la entrega, ver [NOTA_CONTENIDO_NO_INCLUIDO.md](../NOTA_CONTENIDO_NO_INCLUIDO.md)) y se citan con su origen; F6 es de la fase 1 de `src/`; F7–F10 son de la revisión de robustez de la capa 1 (`red.py`) y F11–F14 de la capa 2 (`ur.py`) F15–F19 de la capa 3 (`secuencia.py`, `simulador.py`) F20 de la capa 4 (`main.py`, `tareas.py`) y F21 de la ejecución real con ventana tras las cuatro capas. **F31 es del primer robot real (2026-10-20). F30 es del primer Ubuntu (2026-10-19). F27–F29 son de la primera ejecución en Windows del prototipo (2026-10-19); F25–F27 describen la web, retirada ese mismo día (D27): se conservan como lección.** **F25–F26 son de la web de control (2026-10-17).** **F22–F24 son de la limpieza por capas (2026-10-16).** Cada uno dice qué se ejecutó y qué solo se leyó.
 
 **Qué casos describen código que la limpieza (D17–D21) ya cambió.** Se conservan como historia y como lección; el fallo que explican ya no puede ocurrir o se evita de otra forma:
 
@@ -22,7 +24,7 @@ Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F
 ## F31 – El robot real rechaza el `movej` con el error C210 y el programa decía «Robot detenido» sin haberse movido (2026-10-20, `src/librerias/ur.py`, `secuencia.py`, `ensenar.py`, `red.py`)
 
 - **Síntoma (robot UR real, 10.172.21.205:30001):** se arranca `ensenar.py` con el pendant en **Local**, se guardan puntos, se pasa a **Control remoto** y se pulsa `e`: «ERROR del robot: error del robot (codigo 210): » (texto vacío), seguido de un segundo error 210 por el `stopj` y un «Robot detenido» falso. Con `r` pasaba igual. También salió una vez `Connection reset by peer` justo después de un `g` (probablemente el robot cerrando conexiones al cambiar de modo; no confirmado).
-- **Aislamiento:** ✅ reproducido con el robot real (logs de Josu). ⚠️ **No verificado:** el significado exacto de C210. Primero se supuso «modo Local» (equivocado: en el segundo intento ya estaba en remoto y fallaba igual). **Causa confirmada (2026-10-20):** el robot decide si un socket es de solo lectura **al conectar**; una conexión abierta en Local sigue rechazando órdenes aunque se pase a remoto. Con una conexión nueva en remoto, `r` funcionó y **el robot se movió** (comprobado por Josu con el robot real).
+- **Aislamiento:** ✅ reproducido con el robot real (logs del autor). ⚠️ **No verificado:** el significado exacto de C210. Primero se supuso «modo Local» (equivocado: en el segundo intento ya estaba en remoto y fallaba igual). **Causa confirmada (2026-10-20):** el robot decide si un socket es de solo lectura **al conectar**; una conexión abierta en Local sigue rechazando órdenes aunque se pase a remoto. Con una conexión nueva en remoto, `r` funcionó y **el robot se movió** (comprobado por el autor con el robot real).
 - **Causa (de los fallos del programa, esos sí comprobados):** (1) `_leer_error` leía el texto desde el byte 35 y es el 32 (cabecera 5 + timestamp 8 + source 1 + tipo 1 + code, argument, reportLevel 12 + dataType 1 + data 4); (2) cualquier error con el movimiento en curso lanzaba `stopj`, que el robot también rechazaba, y se imprimía «Robot detenido».
 - **Arreglo:** `ur.CODIGO_SIN_REMOTO = 210`; `_leer_error` devuelve `{"error": ..., "rechazada": True}` para el 210 y los demás errores salen como `(C<código>A<argumento>): texto`. `Reproductor._fallar(motivo, frenar=...)` no manda `stopj` si la orden fue rechazada, dice «no se ha movido» y pone `reconectar = True`; `ensenar.py` sale del bucle de lectura y reconecta (la secuencia se conserva y la fase queda en `PARADA`: se continúa con `r`). Además `ConexionTCP.desconectar()` hace `shutdown(SHUT_RDWR)` antes del `close()`: en Linux `close()` no despierta a un `recv()` de otro hilo (fallaban `test_desconectar_desde_otro_hilo_...` y `test_detener_cierra_el_socket_...`, 'q' tardaba 2 s).
 - **Pruebas:** `ayudas.mensaje_error()` (formato real del paquete) en vez de `struct.pack(">5i")` a mano; nuevas `test_error_codigo_lleva_el_argumento_y_el_texto_entero`, `test_error_210_es_orden_rechazada_por_modo_local`, `test_movej_rechazado_en_modo_local_para_sin_stopj_y_lo_explica`. 184 pruebas OK en Ubuntu (`entorno-linux/bin/python -B -m unittest discover -s pruebas`).
@@ -31,15 +33,15 @@ Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F
 
 ## F30 – En Ubuntu, `iniciar.sh` no podía crear el entorno: Python 3.14 y `pybullet` sin binarios (2026-10-19, `iniciar.sh`)
 
-- **Síntoma (Josu, Ubuntu nuevo):** primero `ensurepip is not available` (falta `python3.14-venv`); instalado eso, `pip install` falla con `numpy` en `Unknown compiler(s): cc, gcc, clang…`.
-- **Aislamiento:** ✅ leído del log de Josu y contrastado con PyPI (`pybullet` 3.2.7: binarios Linux solo hasta `cp311`; `numpy`/`scipy` actuales sí tienen `cp314`, pero el pin `numpy<2` no).
+- **Síntoma (el autor, Ubuntu nuevo):** primero `ensurepip is not available` (falta `python3.14-venv`); instalado eso, `pip install` falla con `numpy` en `Unknown compiler(s): cc, gcc, clang…`.
+- **Aislamiento:** ✅ leído del log del autor y contrastado con PyPI (`pybullet` 3.2.7: binarios Linux solo hasta `cp311`; `numpy`/`scipy` actuales sí tienen `cp314`, pero el pin `numpy<2` no).
 - **Causa:** el script daba por bueno el `python3` del sistema y fijaba versiones viejas; con un Python más nuevo que el de las ruedas, `pip` compila, y no hay compilador.
 - **Arreglo:** el entorno se crea con `uv` y Python 3.11 propio (D28): no depende del Python del sistema, ni de `sudo`, ni de un compilador.
 - **Lección:** «Python 3.9 o superior» no basta: hay que mirar hasta qué versión publican binarios las dependencias; y nunca se supo que Ubuntu iba con 3.14 hasta probar en un PC real.
 
 ## F29 – El segundo robot se quedaba en la pose por defecto y no se movía, mientras la consola decía que recibía datos (2026-10-19, `src/librerias/red.py`)
 
-- **Síntoma (Josu, `iniciar.bat` → tiempo real, 2 robots):** el robot 1 de la ventana se movía; el robot 2 seguía con el brazo estirado en horizontal (q = 0) aunque se moviera su URSim. La consola mostraba líneas de los dos robots, así que parecía que recibía datos.
+- **Síntoma (el autor, `iniciar.bat` → tiempo real, 2 robots):** el robot 1 de la ventana se movía; el robot 2 seguía con el brazo estirado en horizontal (q = 0) aunque se moviera su URSim. La consola mostraba líneas de los dos robots, así que parecía que recibía datos.
 - **Aislamiento:** ✅ ejecutado. (1) El humo de extremo a extremo con el Python portable fallaba a ratos en «2 robots, tiempo real»: `[r2] 0 estados/s | q (grados): sin datos` sin parar, con `r1` bien. (2) Se capturó la salida de un intento fallido: `Traceback … HiloLectorUR.run → ClienteUR.conectar → ConexionTCP.conectar → socket.create_connection → getaddrinfo` y **`LookupError: unknown encoding: idna`**. (3) Reproducido en 8 líneas, sin robots: dos hilos haciendo `socket.create_connection` a la vez en un proceso recién arrancado fallan 2–3 veces de cada 40–120 con el Python portable y 0 de 40 con el del PC. Con URSim real no se reprodujo en las 8 ejecuciones posteriores, pero la causa es la misma.
 - **Causa:** la primera vez que se conecta a una IP, Python convierte el nombre con el códec `idna`, que carga de forma perezosa. Si **dos hilos lo hacen a la vez** (un `HiloLectorUR` por robot, los dos conectan al arrancar), el segundo puede ver el códec a medio importar y falla con `LookupError`, que no es `ErrorRed`: el hilo **muere en silencio** (solo escribe el traceback en `stderr`) y ese robot ya no recibe nada. Con el Python embebido la biblioteca estándar está dentro de un zip, los imports son más lentos y la ventana de la carrera es mayor; con el Python instalado casi no se ve. En «sin datos» no había error porque `ultimo_error` solo se rellena con `ErrorRed`.
 - **Arreglo:** una línea al principio de `red.py`: `import encodings.idna`, que carga el códec una vez, en el hilo principal, antes de crear ningún hilo. Medido: 0 fallos de 120 con el arreglo frente a 3 de 120 sin él; humo portable 5 de 5 `TODO OK` (antes fallaba en 4 de 6); 2 URSim por `iniciar.bat`, 4 de 4 con datos en ambos robots.
@@ -50,7 +52,7 @@ Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F
 
 - **Síntoma:** al ejecutar por primera vez las 223 pruebas con Python 3.7.5 en Windows: `test_detener_cierra_el_puerto…` (`socket.timeout`), `test_con_un_robot_caido_el_otro_sigue_en_marcha` (no aparecía «[caido] DESCONECTADO») y, en otra ejecución, `test_publicar_recorta_del_historial…` (`0.39 not >= 0.4`).
 - **Aislamiento:** ✅ ejecutado. Las dos primeras son F24 otra vez: en Windows conectar a un puerto local donde nadie escucha tarda 1–2 s en ser rechazado y las pruebas daban 2 s y 0,75 s. La tercera: `time.sleep(0.4)` puede durar 0,39 s medidos con `time.monotonic` (el reloj de Windows va a saltos de ≈ 15 ms).
-- **Causa:** supuestos de tiempo de pruebas escritas en Linux (la Pi).
+- **Causa:** supuestos de tiempo de pruebas escritas en Linux.
 - **Arreglo:** `timeout=5` en la conexión, `pausas=80` (4 s) en la de `visualizar` con un robot caído y `sleep(0.5)` donde se exigía ≥ 0,4 s. Con eso, 223 de 223 OK.
 - **Lección:** en pruebas de tiempo, margen holgado y nunca igualdad con lo dormido; un puerto cerrado en Windows no se rechaza al instante.
 
@@ -242,11 +244,11 @@ Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F
 - **Commit:** `800dd7d` (la prueba se confirmó ya corregida).
 - **Para la defensa:** un envío correcto por TCP no prueba que el otro lado lo haya procesado; lo mismo pasa con un robot real: tras `stopj` hay que mirar su estado, no dar por hecho que ya se paró.
 
-## F5 – `a_mano/main.py` no imprime nada (2026-10-13, de `versiones/a_mano`)
+## F5 – el `main.py` de la versión a mano no imprime nada (2026-10-13, de la versión de partida a mano)
 
 - **Síntoma:** contra el robot falso en `127.0.0.1` (con una copia de `main.py` con IP y puerto cambiados) no sale nada en 6 s.
 - **Hipótesis:** el programa no llega nunca al subpaquete 1 (articulaciones).
-- **Aislamiento:** ✅ ejecutado por la Pi con una copia que imprime la cabecera de cada subpaquete (`tam_subpaquete`, `tipo_subpaquete`):
+- **Aislamiento:** ✅ ejecutado con una copia que imprime la cabecera de cada subpaquete (`tam_subpaquete`, `tipo_subpaquete`):
 
   ```
   sub 47 0
@@ -257,32 +259,32 @@ Los casos F1–F5 vienen de las versiones de partida y se citan con su origen; F
 
   Tras el subpaquete 0 (47 B) aparece `417`, tipo `53`: datos leídos como si fueran cabecera.
 - **Causa:** tras leer la cabecera de 5 B del subpaquete 0, el `else` de la línea 33 solo suma `tam_subpaquete` al contador y **no lee el cuerpo (42 B)**. La siguiente lectura de 5 B cae en mitad de los datos.
-- **Arreglo:** leer siempre `tam_subpaquete − 5` bytes después de cada cabecera, sea cual sea el tipo. No se aplica a `a_mano` (se conserva tal cual); la versión final lo hace desde el principio (D2). El protocolo es el mismo en un robot real, pero **no se ha probado** con uno.
+- **Arreglo:** leer siempre `tam_subpaquete − 5` bytes después de cada cabecera, sea cual sea el tipo. No se aplica a la versión a mano (se conservó tal cual); la versión final lo hace desde el principio (D2). El protocolo es el mismo en un robot real, pero **no se ha probado** con uno.
 - **Además, leyendo el código (sin ejecutarlo):** `recv(n)` sin bucle en las líneas 16, 24, 28 y 36 (TCP puede devolver menos bytes); `range(0, 5)` en la línea 27 lee 5 de las 6 articulaciones; en la rama del subpaquete 1 el contador no se incrementa.
 - **Commit:** —
 
-## F4 – Segundo URSim: red puente frente a NAT, y un clon que hereda las reglas (2026-10-08, de `versiones/claude_1`, docs/06 B4)
+## F4 – Segundo URSim: red puente frente a NAT, y un clon que hereda las reglas (2026-10-08, de la versión de partida Claude 1, B4)
 
-- **Síntoma:** al darle a Josu comandos con `<ip_vm2>` y `NOMBRE_DE_TU_TARJETA`, PowerShell los rechazó (`<` es un operador reservado). Además, el clon de la VM heredó las reglas NAT de la VM 1 (mismos puertos de host), y cambiar `nic1` de puente a NAT **en caliente** no renovó la IP del invitado: se quedó sin red hasta reiniciarlo.
-- **Aislamiento:** descartada la red puente (comandos con placeholders). Josu propuso dejar ambas VM en NAT con puertos de host distintos; se adoptó.
+- **Síntoma:** al darle al autor comandos con `<ip_vm2>` y `NOMBRE_DE_TU_TARJETA`, PowerShell los rechazó (`<` es un operador reservado). Además, el clon de la VM heredó las reglas NAT de la VM 1 (mismos puertos de host), y cambiar `nic1` de puente a NAT **en caliente** no renovó la IP del invitado: se quedó sin red hasta reiniciarlo.
+- **Aislamiento:** descartada la red puente (comandos con placeholders). El autor propuso dejar ambas VM en NAT con puertos de host distintos; se adoptó.
 - **Causa:** placeholders no ejecutables en PowerShell; reglas NAT copiadas con el clon; cambio de adaptador sin reiniciar el invitado.
 - **Arreglo:** borrar las 4 reglas heredadas y crear otras (30001/30003 para la VM 1 y 30011/30013 para la VM 2). Contrapartida: `ur_rtde` y el Dashboard usan puertos fijos (30004 y 29999), así que la VM 2 solo se usa por `socket`.
 - **Commit:** —
 
-## F3 – `UR3e_rg2` no instala con Python 3.7 (2026-10-08, de `versiones/claude_1`, docs/06 B3)
+## F3 – `UR3e_rg2` no instala con Python 3.7 (2026-10-08, de la versión de partida Claude 1, B3)
 
 - **Síntoma:** `BulletGym.py` importa `TypedDict` y `Literal` de `typing` (existen desde Python 3.8) y `setup.py` fija `numpy==1.24.4` y `scipy==1.10.1`, que exigen ≥ 3.8.
 - **Causa:** la librería está pensada para Python ≥ 3.8.
-- **Arreglo:** instalar con `--no-deps` desde una **copia parcheada** (importar de `typing_extensions`) y las dependencias compatibles a mano. Detalle en [docs/entorno.md](../../../docs/entorno.md).
+- **Arreglo:** instalar con `--no-deps` desde una **copia parcheada** (importar de `typing_extensions`) y las dependencias compatibles a mano.
 - **Commit:** —
 
-## F2 – `pip install ur_rtde` falla por permisos (2026-10-08, de `versiones/claude_1`, docs/06 B2)
+## F2 – `pip install ur_rtde` falla por permisos (2026-10-08, de la versión de partida Claude 1, B2)
 
 - **Síntoma:** `pip install ur_rtde` sin `--user` falla por permisos: la sesión no es de administrador.
 - **Arreglo:** `pip install --user --only-binary :all: ur_rtde` (ur_rtde 1.6.5 trae rueda para Windows y Python 3.7).
 - **Commit:** —
 
-## F1 – `pybullet` no se instala en Windows con Python 3.7 (2026-10-08, de `versiones/claude_1`, docs/06 B1)
+## F1 – `pybullet` no se instala en Windows con Python 3.7 (2026-10-08, de la versión de partida Claude 1, B1)
 
 - **Síntoma:** `pip install pybullet ur_rtde` falló con `error: command 'cl.exe' failed: No such file or directory`.
 - **Aislamiento:** `pip download pybullet --only-binary :all:` dio «no matching distribution». La API JSON de PyPI mostró que todas las ruedas son `manylinux`, sin `win_amd64`: por eso el año anterior, en el Linux del laboratorio, iba sin más.

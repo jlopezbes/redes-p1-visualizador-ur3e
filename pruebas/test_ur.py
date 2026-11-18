@@ -2,7 +2,7 @@
 Pruebas de src/ur.py: decodificacion con bytes, ordenes movej/stopj con una conexion falsa, y ClienteUR (primaria y
 tiempo real) y HiloLectorUR contra un servidor local. No necesita robot.
 
-    python -B -m unittest discover -s 2_practicas\\Practica1_visualizador_UR3e\\pruebas -v
+    python -B -m unittest discover -s pruebas -v
 """
 import contextlib
 import io
@@ -446,7 +446,7 @@ class PruebasRobots(unittest.TestCase):
         self.assertIn(ruta, str(e.exception))
 
     def test_el_robots_json_real_de_la_practica_es_valido(self):
-        # Solo que cargue y tenga IP literales: las IP concretas las cambia Josu segun los robots que use.
+        # Solo que cargue y tenga IP literales: las IP concretas las cambia el autor segun los robots que use.
         ruta = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "datos", "robots.json")
         robots = ur.leer_robots(ruta)
         self.assertGreaterEqual(len(robots), 1)
